@@ -1,0 +1,25 @@
+<svg width="1200" height="760" viewBox="0 0 1200 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="760" rx="28" fill="#EEF1F0"/>
+  <rect x="0" y="0" width="1200" height="72" rx="28" fill="#10221D"/>
+  <circle cx="38" cy="36" r="8" fill="#FF5D48"/><circle cx="66" cy="36" r="8" fill="#FFB84D"/><circle cx="94" cy="36" r="8" fill="#53D99F"/>
+  <rect x="144" y="19" width="910" height="36" rx="18" fill="#233A33"/>
+  <text x="171" y="43" fill="#BFCBC6" font-family="Arial" font-size="15">https://bank-nusantara-verify.xyz/login</text>
+  <rect x="250" y="118" width="700" height="560" rx="18" fill="white"/>
+  <rect x="250" y="118" width="700" height="106" rx="18" fill="#0A2A22"/>
+  <path d="M310 147 345 159V184C345 205 330 218 310 225 290 218 275 205 275 184V159L310 147Z" stroke="#C9FF58" stroke-width="4"/>
+  <text x="374" y="178" fill="white" font-family="Arial" font-size="27" font-weight="700">BANK NUSANTARA</text>
+  <text x="374" y="203" fill="#9BB0A8" font-family="Arial" font-size="14">Pusat Keamanan Digital</text>
+  <rect x="302" y="265" width="596" height="74" rx="10" fill="#FFF0ED"/>
+  <circle cx="342" cy="302" r="19" fill="#FF5D48"/>
+  <text x="336" y="309" fill="white" font-family="Arial" font-size="22" font-weight="700">!</text>
+  <text x="378" y="295" fill="#A62F23" font-family="Arial" font-size="18" font-weight="700">AKUN AKAN DIBLOKIR HARI INI</text>
+  <text x="378" y="318" fill="#7A514C" font-family="Arial" font-size="13">Segera verifikasi untuk mempertahankan akses.</text>
+  <text x="302" y="390" fill="#52635D" font-family="Arial" font-size="15">Nomor rekening</text>
+  <rect x="302" y="404" width="596" height="54" rx="7" fill="#F6F7F6" stroke="#CDD4D1"/>
+  <text x="322" y="437" fill="#99A49F" font-family="Arial" font-size="14">Masukkan nomor rekening</text>
+  <text x="302" y="493" fill="#52635D" font-family="Arial" font-size="15">PIN / kata sandi</text>
+  <rect x="302" y="507" width="596" height="54" rx="7" fill="#F6F7F6" stroke="#CDD4D1"/>
+  <text x="322" y="540" fill="#99A49F" font-family="Arial" font-size="14">••••••••</text>
+  <rect x="302" y="588" width="596" height="58" rx="7" fill="#10221D"/>
+  <text x="498" y="625" fill="#C9FF58" font-family="Arial" font-size="17" font-weight="700">VERIFIKASI SEKARANG</text>
+</svg>

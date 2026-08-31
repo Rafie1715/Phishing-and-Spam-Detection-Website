@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: Inter, Aptos, "Segoe UI", Arial, sans-serif;
+  --font-display: "Arial Narrow", "Aptos Display", "Segoe UI", sans-serif;
+  --color-ink: #0a1613;
+  --color-forest: #07110f;
+  --color-acid: #c9ff58;
+  --color-paper: #f1f0e8;
+  --color-danger: #ff5d48;
+  --color-warning: #ffb84d;
+  --color-safe: #53d99f;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    overflow-x: hidden;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  button, a { -webkit-tap-highlight-color: transparent; }
+  button { cursor: pointer; }
+}
+
+.noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
+}
+
+.radar-grid {
+  background-image: linear-gradient(rgba(201,255,88,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(201,255,88,.07) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(circle, #000 30%, transparent 72%);
+}
+
+.radar-sweep {
+  background: conic-gradient(from 0deg, rgba(201,255,88,.38), transparent 23%);
+  transform-origin: left bottom;
+  animation: radar-sweep 5s linear infinite;
+}
+
+.hero-enter { animation: hero-in .75s both cubic-bezier(.2,.7,.2,1); }
+.hero-enter-late { animation: hero-in .75s .12s both cubic-bezier(.2,.7,.2,1); }
+.spin { animation: spin .8s linear infinite; }
+.pulse-ring { animation: pulse-ring 2s infinite; }
+
+@keyframes radar-sweep { to { transform: rotate(360deg); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes hero-in { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+@keyframes pulse-ring { 0%,100% { transform: scale(.7); opacity: 1; } 50% { transform: scale(1.6); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
