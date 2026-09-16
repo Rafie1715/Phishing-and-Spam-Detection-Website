@@ -33,31 +33,48 @@ npm run build
 - Navigasi responsif dan menu mobile
 - Animasi radar, loading state, toast, serta dukungan reduced motion
 - Mode demo tidak mengirim data keluar dari browser
+- Panduan tiga langkah, animasi proses, penjelasan skor, salin ringkasan, dan FAQ interaktif
 
-## Menghubungkan model
+## Menghubungkan backend FastAPI
 
-Salin `.env.example` menjadi `.env`, kemudian arahkan variabel berikut ke endpoint inferensi Anda:
+Frontend sudah disesuaikan dengan repository `https://github.com/dihaayyy/scam-project-backend`.
+Salin `.env.example` menjadi `.env.local`, lalu isi base URL backend:
 
 ```env
-VITE_DETECTION_API_URL=http://localhost:8000/analyze
+VITE_API_BASE_URL=http://localhost:8000
+VITE_API_ENABLED=true
 ```
 
-Kontrak request yang digunakan oleh `src/services/detectionService.js`:
+Jalankan backend pada port `8000`, pastikan CORS backend menyertakan `http://localhost:5173`, lalu jalankan frontend dengan `npm run dev`.
 
-- URL/pesan: JSON `{ "mode": "url|message", "content": "..." }`
-- Screenshot: `multipart/form-data` dengan field `mode=image` dan file pada field `image`
+Alur yang digunakan:
 
-Contoh response model:
+1. Register melalui `POST /auth/register`.
+2. Verifikasi email melalui `POST /auth/verify-otp`.
+3. Login melalui `POST /auth/login`.
+4. Access token dikirim sebagai header Bearer untuk setiap analisis.
+
+Kontrak deteksi:
+
+- URL/pesan: `POST /detection/text` dengan JSON `{ "text": "..." }`.
+- Screenshot: `POST /detection/image` dengan file pada multipart field `file`.
+- Riwayat: `GET /detection/history?page=1&size=10`.
+
+Contoh respons backend:
 
 ```json
 {
-  "score": 84,
-  "level": "high",
-  "signals": ["visualBrand", "visualUrgency", "visualForm"],
-  "report_id": 15235
+  "id": 1,
+  "input_type": "text",
+  "input_text": "Akun Anda akan diblokir",
+  "extracted_text": null,
+  "verdict": "scam",
+  "confidence_score": 0.97,
+  "category": "penipuan",
+  "created_at": "2026-09-06T10:00:00Z"
 }
 ```
 
-Jika variabel API tidak diisi, aplikasi otomatis menggunakan simulasi lokal dan tidak mengunggah screenshot.
+Untuk kembali ke simulasi lokal tanpa backend, set `VITE_API_ENABLED=false` lalu restart Vite.
 
-> Catatan: mesin analisis pada versi ini adalah simulasi front-end untuk kebutuhan UI/UX, bukan pengganti layanan keamanan produksi.
+> Catatan: OCR pada backend saat ini masih placeholder. Endpoint screenshot sudah terhubung, tetapi backend perlu implementasi OCR asli agar isi gambar benar-benar dianalisis.

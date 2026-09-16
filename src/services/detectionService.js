@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_DETECTION_API_URL?.trim()
+import { apiRequest, IS_API_ENABLED } from './apiClient.js'
 
 function mockTextAnalysis(value, mode) {
   const text = value.toLowerCase()
@@ -37,13 +37,29 @@ function buildResult(score, found, source = 'demo') {
 }
 
 function normalizeModelResult(data) {
-  const score = Math.max(0, Math.min(100, Number(data.score ?? data.risk_score ?? 0)))
-  const found = data.found ?? data.signals ?? []
+  const confidence = Math.max(0, Math.min(1, Number(data.confidence_score ?? 0)))
+  const level = { safe: 'low', suspicious: 'medium', scam: 'high' }[data.verdict] ?? 'medium'
+  const score = level === 'low'
+    ? Math.round((1 - confidence) * 34)
+    : level === 'medium'
+      ? Math.round(35 + confidence * 29)
+      : Math.round(65 + confidence * 35)
+  const signal = {
+    normal: 'modelNormal',
+    promo: 'modelPromo',
+    penipuan: 'modelScam',
+  }[data.category] ?? 'modelUnknown'
+
   return {
     score,
-    found: found.length ? found : ['secure'],
-    level: data.level ?? (score >= 65 ? 'high' : score >= 35 ? 'medium' : 'low'),
-    reportId: data.reportId ?? data.report_id ?? Math.floor(10000 + Math.random() * 89999),
+    found: [signal],
+    level,
+    reportId: data.id,
+    confidence: Math.round(confidence * 100),
+    category: data.category,
+    verdict: data.verdict,
+    extractedText: data.extracted_text,
+    createdAt: data.created_at,
     source: 'model',
   }
 }
@@ -52,24 +68,32 @@ export function createDemoResult(value, mode = 'url') {
   return mode === 'image' ? mockImageAnalysis() : mockTextAnalysis(value, mode)
 }
 
-export async function detectThreat({ mode, value = '', file = null }) {
-  if (!API_URL) {
+export async function detectThreat({ mode, value = '', file = null, accessToken = '' }) {
+  if (!IS_API_ENABLED) {
     await new Promise((resolve) => setTimeout(resolve, 950))
     return mode === 'image' ? mockImageAnalysis() : mockTextAnalysis(value, mode)
   }
 
-  const options = { method: 'POST' }
-  if (mode === 'image') {
-    const body = new FormData()
-    body.append('mode', mode)
-    body.append('image', file)
-    options.body = body
-  } else {
-    options.headers = { 'Content-Type': 'application/json' }
-    options.body = JSON.stringify({ mode, content: value })
+  if (!accessToken) {
+    const error = new Error('Silakan masuk terlebih dahulu untuk menggunakan analisis model.')
+    error.status = 401
+    throw error
   }
 
-  const response = await fetch(API_URL, options)
-  if (!response.ok) throw new Error(`Model API merespons ${response.status}`)
-  return normalizeModelResult(await response.json())
+  if (mode === 'image') {
+    const body = new FormData()
+    body.append('file', file)
+    return normalizeModelResult(await apiRequest('/detection/image', {
+      method: 'POST',
+      body,
+      accessToken,
+    }))
+  }
+
+  const text = mode === 'url' ? `https://${value.replace(/^https?:\/\//i, '')}` : value
+  return normalizeModelResult(await apiRequest('/detection/text', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+    accessToken,
+  }))
 }
