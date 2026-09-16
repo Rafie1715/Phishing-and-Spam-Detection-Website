@@ -29,6 +29,8 @@ function mockImageAnalysis() {
 function buildResult(score, found, source = 'demo') {
   return {
     score,
+    metric: 'risk',
+    metricLabel: 'Skor risiko',
     found,
     level: score >= 65 ? 'high' : score >= 35 ? 'medium' : 'low',
     reportId: Math.floor(10000 + Math.random() * 89999),
@@ -39,11 +41,11 @@ function buildResult(score, found, source = 'demo') {
 function normalizeModelResult(data) {
   const confidence = Math.max(0, Math.min(1, Number(data.confidence_score ?? 0)))
   const level = { safe: 'low', suspicious: 'medium', scam: 'high' }[data.verdict] ?? 'medium'
-  const score = level === 'low'
-    ? Math.round((1 - confidence) * 34)
-    : level === 'medium'
-      ? Math.round(35 + confidence * 29)
-      : Math.round(65 + confidence * 35)
+  const rawRiskScore = Number(data.risk_score)
+  const hasRiskScore = data.risk_score !== null && data.risk_score !== undefined && Number.isFinite(rawRiskScore)
+  const score = hasRiskScore
+    ? Math.round(Math.max(0, Math.min(100, rawRiskScore <= 1 ? rawRiskScore * 100 : rawRiskScore)))
+    : Math.round(confidence * 100)
   const signal = {
     normal: 'modelNormal',
     promo: 'modelPromo',
@@ -52,6 +54,8 @@ function normalizeModelResult(data) {
 
   return {
     score,
+    metric: hasRiskScore ? 'risk' : 'confidence',
+    metricLabel: hasRiskScore ? 'Skor risiko' : 'Keyakinan model',
     found: [signal],
     level,
     reportId: data.id,

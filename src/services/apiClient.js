@@ -2,6 +2,7 @@ const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 
 export const API_BASE_URL = (configuredBaseUrl || 'http://localhost:8000').replace(/\/$/, '')
 export const IS_API_ENABLED = import.meta.env.VITE_API_ENABLED !== 'false'
+const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 20000)
 
 function getErrorMessage(data, status) {
   const detail = data?.detail
@@ -15,7 +16,23 @@ function getErrorMessage(data, status) {
   return `Permintaan gagal (${status}).`
 }
 
-export async function apiRequest(path, { accessToken, headers: customHeaders, ...options } = {}) {
+async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('Permintaan terlalu lama. Periksa koneksi Anda lalu coba lagi.')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
+export async function apiRequest(path, { accessToken, headers: customHeaders, timeoutMs, ...options } = {}) {
   if (!IS_API_ENABLED) throw new Error('API backend sedang dinonaktifkan.')
 
   const headers = new Headers(customHeaders)
@@ -24,13 +41,14 @@ export async function apiRequest(path, { accessToken, headers: customHeaders, ..
 
   let response
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
       ...options,
       headers,
       credentials: 'include',
-    })
-  } catch {
-    throw new Error(`Backend tidak dapat dijangkau di ${API_BASE_URL}. Pastikan FastAPI sudah berjalan.`)
+    }, timeoutMs)
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('terlalu lama')) throw error
+    throw new Error('Layanan analisis belum dapat dijangkau. Periksa koneksi lalu coba kembali.')
   }
 
   const data = response.status === 204 ? null : await response.json().catch(() => null)
@@ -46,10 +64,14 @@ export async function apiRequest(path, { accessToken, headers: customHeaders, ..
 export async function checkApiConnection() {
   if (!IS_API_ENABLED) return false
 
-  try {
-    const response = await fetch(`${API_BASE_URL}/docs`, { method: 'GET' })
-    return response.ok
-  } catch {
-    return false
+  for (const path of ['/health', '/docs']) {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, { method: 'GET' }, 4500)
+      if (response.ok) return true
+    } catch {
+      // Coba endpoint kompatibilitas berikutnya.
+    }
   }
+
+  return false
 }

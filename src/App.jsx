@@ -1,10 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createDemoResult, detectThreat } from './services/detectionService.js'
-import { loginUser, registerUser, resendOtp, verifyOtp, getCurrentUser } from './services/authService.js'
-import { API_BASE_URL, IS_API_ENABLED, checkApiConnection } from './services/apiClient.js'
+import { forgotPassword, getCurrentUser, loginUser, registerUser, resendOtp, resetPassword, verifyOtp } from './services/authService.js'
+import { IS_API_ENABLED, checkApiConnection } from './services/apiClient.js'
+import HistoryDrawer from './components/HistoryDrawer.jsx'
+import { useActiveSection } from './hooks/useActiveSection.js'
 
 const shell = 'mx-auto w-[calc(100%_-_48px)] max-w-[1180px] max-sm:w-[calc(100%_-_30px)]'
 const displayTitle = 'font-display font-black uppercase leading-[.9] tracking-[-.065em]'
+const NAV_ITEMS = [
+  ['scanner', 'Pemindai'],
+  ['cara-kerja', 'Cara kerja'],
+  ['wawasan', 'Wawasan'],
+  ['bantuan', 'Bantuan'],
+]
+const NAV_SECTION_IDS = NAV_ITEMS.map(([id]) => id)
 
 const SAMPLE = {
   url: 'secure-bank-verifikasi-login.xyz/account?urgent=true',
@@ -95,14 +104,15 @@ function Eyebrow({ number, children, light = false }) {
   )
 }
 
-function Header({ session, apiStatus, onOpenAuth, onLogout }) {
+function Header({ session, apiStatus, onOpenAuth, onOpenHistory, onLogout }) {
   const [open, setOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
+  const activeSection = useActiveSection(NAV_SECTION_IDS)
   const close = () => setOpen(false)
   const statusCopy = {
-    checking: ['Memeriksa API', 'bg-warning'],
-    online: ['API terhubung', 'bg-safe'],
-    offline: ['API offline', 'bg-danger'],
+    checking: ['Memeriksa layanan', 'bg-warning'],
+    online: ['Layanan siap', 'bg-safe'],
+    offline: ['Layanan terganggu', 'bg-danger'],
     demo: ['Mode demo', 'bg-warning'],
   }[apiStatus]
   const navLink = "relative py-2 font-semibold tracking-[-.02em] text-[#52605b] transition-colors duration-300 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:origin-left after:scale-x-0 after:bg-[#72b136] after:content-[''] after:transition-transform after:duration-300 after:ease-out hover:text-ink hover:after:scale-x-100 focus-visible:text-ink focus-visible:after:scale-x-100"
@@ -112,10 +122,7 @@ function Header({ session, apiStatus, onOpenAuth, onLogout }) {
       <div className="relative mx-auto flex h-[88px] w-[calc(100vw_-_48px)] max-w-[1280px] items-center justify-between max-sm:h-[74px] max-sm:w-[calc(100vw_-_30px)]">
         <Brand />
         <nav className="flex items-center gap-10 font-display text-[13px] max-[960px]:hidden" aria-label="Navigasi utama">
-          <a className={`${navLink} text-ink after:scale-x-100`} href="#scanner">Pemindai</a>
-          <a className={navLink} href="#cara-kerja">Cara kerja</a>
-          <a className={navLink} href="#wawasan">Wawasan</a>
-          <a className={navLink} href="#bantuan">Bantuan</a>
+          {NAV_ITEMS.map(([id, label]) => <a key={id} className={`${navLink} ${activeSection === id ? 'text-ink after:scale-x-100' : ''}`} aria-current={activeSection === id ? 'page' : undefined} href={`#${id}`}>{label}</a>)}
         </nav>
         <div className="flex items-center gap-5">
           <div className="flex items-center gap-2 text-[9px] font-extrabold uppercase tracking-[.14em] text-[#4e5d58] max-[960px]:hidden">
@@ -125,7 +132,7 @@ function Header({ session, apiStatus, onOpenAuth, onLogout }) {
           {session.user ? (
             <div className="relative max-[960px]:hidden">
               <button onClick={() => setAccountOpen((value) => !value)} aria-expanded={accountOpen} className="flex h-[42px] items-center gap-2 border border-ink px-[14px] text-xs font-bold transition hover:bg-ink hover:text-white"><span className="grid size-6 place-items-center rounded-full bg-acid text-[9px] text-ink">{session.user.name?.slice(0, 1).toUpperCase()}</span>{session.user.name?.split(' ')[0]}</button>
-              {accountOpen && <div className="absolute right-0 top-[50px] w-[245px] border border-ink/10 bg-white p-4 shadow-[0_24px_65px_rgba(5,15,12,.16)]"><span className="block truncate text-[11px] font-bold">{session.user.name}</span><span className="mt-1 block truncate text-[9px] text-[#78847f]">{session.user.email}</span><button onClick={() => { setAccountOpen(false); onLogout() }} className="mt-4 w-full border-t border-ink/10 pt-3 text-left text-[10px] font-bold text-danger">Keluar dari sesi</button></div>}
+              {accountOpen && <div className="absolute right-0 top-[50px] w-[245px] border border-ink/10 bg-white p-4 shadow-[0_24px_65px_rgba(5,15,12,.16)]"><span className="block truncate text-[11px] font-bold">{session.user.name}</span><span className="mt-1 block truncate text-[10px] text-[#78847f]">{session.user.email}</span><button onClick={() => { setAccountOpen(false); onOpenHistory() }} className="mt-4 w-full border-t border-ink/10 pt-3 text-left text-[11px] font-bold text-ink transition hover:text-[#5f853f]">Riwayat pemeriksaan</button><button onClick={() => { setAccountOpen(false); onLogout() }} className="mt-3 w-full text-left text-[11px] font-bold text-danger">Keluar dari sesi</button></div>}
             </div>
           ) : (
             <button onClick={() => onOpenAuth('login')} className="grid h-[42px] place-items-center border border-ink px-5 text-[11px] font-extrabold tracking-[-.01em] transition duration-300 hover:-translate-y-px hover:bg-ink hover:text-white max-[960px]:hidden">Masuk</button>
@@ -136,7 +143,8 @@ function Header({ session, apiStatus, onOpenAuth, onLogout }) {
           </button>
         </div>
         <nav className={`absolute right-0 top-[66px] flex w-[230px] flex-col gap-4 rounded-b-2xl border border-ink/15 bg-white p-5 font-display text-[13px] font-semibold shadow-[0_24px_65px_rgba(5,15,12,.16)] transition duration-300 max-[960px]:flex min-[961px]:hidden ${open ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-2 opacity-0'}`} aria-label="Navigasi seluler">
-          <a className={mobileLink} onClick={close} href="#scanner">Pemindai</a><a className={mobileLink} onClick={close} href="#cara-kerja">Cara kerja</a><a className={mobileLink} onClick={close} href="#wawasan">Wawasan</a><a className={mobileLink} onClick={close} href="#bantuan">Bantuan</a>{session.user ? <button onClick={() => { close(); onLogout() }} className="pt-1 text-left text-danger">Keluar · {session.user.name?.split(' ')[0]}</button> : <button onClick={() => { close(); onOpenAuth('login') }} className="pt-1 text-left">Masuk / Daftar</button>}
+          {NAV_ITEMS.map(([id, label]) => <a key={id} className={`${mobileLink} ${activeSection === id ? 'text-[#5f853f]' : ''}`} onClick={close} href={`#${id}`}>{label}</a>)}
+          {session.user ? <><button onClick={() => { close(); onOpenHistory() }} className="pt-1 text-left text-ink">Riwayat pemeriksaan</button><button onClick={() => { close(); onLogout() }} className="pt-1 text-left text-danger">Keluar · {session.user.name?.split(' ')[0]}</button></> : <button onClick={() => { close(); onOpenAuth('login') }} className="pt-1 text-left">Masuk / Daftar</button>}
         </nav>
       </div>
     </header>
@@ -145,24 +153,43 @@ function Header({ session, apiStatus, onOpenAuth, onLogout }) {
 
 function AuthModal({ open, initialView, apiStatus, onClose, onAuthenticated }) {
   const [view, setView] = useState(initialView)
-  const [form, setForm] = useState({ name: '', email: '', password: '', otpCode: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', newPassword: '', otpCode: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const modalRef = useRef(null)
+  const returnFocusRef = useRef(null)
 
   useEffect(() => {
     if (!open) return undefined
+    returnFocusRef.current = document.activeElement
     setView(initialView)
     setError('')
     setNotice('')
-    const onKeyDown = (event) => event.key === 'Escape' && onClose()
-    document.addEventListener('keydown', onKeyDown)
     document.body.style.overflow = 'hidden'
+    window.requestAnimationFrame(() => modalRef.current?.querySelector('input, button')?.focus())
     return () => {
-      document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = ''
+      setForm((current) => ({ ...current, password: '', newPassword: '', otpCode: '' }))
+      returnFocusRef.current?.focus?.()
     }
-  }, [open, initialView, onClose])
+  }, [open, initialView])
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape' && !loading) onClose()
+      if (event.key !== 'Tab') return
+      const focusable = [...modalRef.current.querySelectorAll('button:not([disabled]), input:not([disabled]), a[href]')]
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open, loading, onClose])
 
   if (!open) return null
 
@@ -195,6 +222,21 @@ function AuthModal({ open, initialView, apiStatus, onClose, onAuthenticated }) {
         return
       }
 
+      if (view === 'forgot') {
+        await forgotPassword(form.email.trim())
+        setNotice('Kode pemulihan telah dikirim. Masukkan kode dan kata sandi baru Anda.')
+        setView('reset')
+        return
+      }
+
+      if (view === 'reset') {
+        await resetPassword({ email: form.email.trim(), otpCode: form.otpCode.trim(), newPassword: form.newPassword })
+        setForm((current) => ({ ...current, password: '', newPassword: '', otpCode: '' }))
+        setNotice('Kata sandi berhasil diperbarui. Silakan masuk kembali.')
+        setView('login')
+        return
+      }
+
       const token = await loginUser({ email: form.email.trim(), password: form.password })
       const user = await getCurrentUser(token.access_token)
       onAuthenticated({ accessToken: token.access_token, user })
@@ -211,8 +253,9 @@ function AuthModal({ open, initialView, apiStatus, onClose, onAuthenticated }) {
     setNotice('')
     setLoading(true)
     try {
-      await resendOtp(form.email.trim())
-      setNotice('OTP baru berhasil dikirim.')
+      if (view === 'reset') await forgotPassword(form.email.trim())
+      else await resendOtp(form.email.trim())
+      setNotice('Kode baru berhasil dikirim.')
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'OTP gagal dikirim ulang.')
     } finally {
@@ -220,35 +263,50 @@ function AuthModal({ open, initialView, apiStatus, onClose, onAuthenticated }) {
     }
   }
 
-  const title = view === 'login' ? 'Selamat datang kembali.' : view === 'register' ? 'Buat ruang aman Anda.' : 'Verifikasi identitas.'
-  const subtitle = view === 'login' ? 'Masuk untuk menganalisis ancaman dan menyimpan riwayat pemeriksaan.' : view === 'register' ? 'Satu akun untuk hasil model dan riwayat yang terpisah secara aman.' : `Masukkan kode OTP yang dikirim ke ${form.email}.`
+  const copy = {
+    login: ['Masuk akun', 'Selamat datang kembali.', 'Masuk untuk menganalisis ancaman dan menyimpan riwayat pemeriksaan.'],
+    register: ['Akun baru', 'Buat ruang aman Anda.', 'Satu akun untuk hasil analisis dan riwayat pemeriksaan pribadi.'],
+    verify: ['Verifikasi akun', 'Verifikasi identitas.', `Masukkan kode yang dikirim ke ${form.email}.`],
+    forgot: ['Pemulihan akun', 'Lupa kata sandi?', 'Masukkan email akun Anda. Kami akan mengirim kode pemulihan.'],
+    reset: ['Kata sandi baru', 'Amankan kembali akun.', `Masukkan kode yang dikirim ke ${form.email}, lalu buat kata sandi baru.`],
+  }[view]
+  const showPassword = view === 'login' || view === 'register'
+  const showOtp = view === 'verify' || view === 'reset'
 
   return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-forest/75 p-5 backdrop-blur-md" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section role="dialog" aria-modal="true" aria-labelledby="auth-title" className="relative grid w-full max-w-[860px] grid-cols-[.82fr_1.18fr] overflow-hidden rounded-[28px] bg-paper shadow-[0_35px_100px_rgba(0,0,0,.35)] max-[760px]:max-w-[510px] max-[760px]:grid-cols-1">
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-forest/75 p-5 backdrop-blur-md" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !loading && onClose()}>
+      <section ref={modalRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" className="relative grid max-h-[calc(100vh_-_40px)] w-full max-w-[860px] grid-cols-[.82fr_1.18fr] overflow-hidden rounded-[28px] bg-paper shadow-[0_35px_100px_rgba(0,0,0,.35)] max-[760px]:max-w-[510px] max-[760px]:grid-cols-1">
         <div className="relative overflow-hidden bg-ink p-10 text-white max-[760px]:hidden">
           <ResultBackdrop />
           <div className="relative z-10 flex h-full min-h-[500px] flex-col">
             <Brand />
-            <div className="my-auto"><span className="text-[9px] font-extrabold uppercase tracking-[.16em] text-acid">Protected workspace</span><h2 className={`${displayTitle} mt-4 text-[42px]`}>Analisis privat.<br />Riwayat personal.</h2><p className="mt-5 max-w-[290px] text-xs leading-[1.8] text-[#91a09a]">Token akses hanya dipakai untuk berkomunikasi dengan backend Anda dan disimpan selama tab browser ini aktif.</p></div>
-            <div className="flex items-center gap-2 border-t border-white/10 pt-5 text-[9px] uppercase tracking-[.1em] text-[#91a09a]"><span className={`size-2 rounded-full ${apiStatus === 'online' ? 'bg-safe' : 'bg-danger'}`} />{apiStatus === 'online' ? `Terhubung · ${API_BASE_URL}` : `Menunggu backend · ${API_BASE_URL}`}</div>
+            <div className="my-auto"><span className="text-[9px] font-extrabold uppercase tracking-[.16em] text-acid">Ruang pribadi</span><h2 className={`${displayTitle} mt-4 text-[42px]`}>Analisis privat.<br />Riwayat personal.</h2><p className="mt-5 max-w-[290px] text-xs leading-[1.8] text-[#91a09a]">Sesi Anda hanya bertahan selama halaman ini dibuka. Tutup atau muat ulang halaman untuk mengakhirinya.</p></div>
+            <div className="flex items-center gap-2 border-t border-white/10 pt-5 text-[10px] uppercase tracking-[.1em] text-[#91a09a]"><span className={`size-2 rounded-full ${apiStatus === 'online' ? 'bg-safe' : 'bg-danger'}`} />{apiStatus === 'online' ? 'Layanan analisis siap' : 'Layanan analisis belum tersedia'}</div>
           </div>
         </div>
-        <div className="relative p-10 max-sm:p-6">
-          <button type="button" onClick={onClose} aria-label="Tutup dialog autentikasi" className="absolute right-5 top-5 grid size-9 place-items-center rounded-full border border-ink/10 text-xl font-light transition hover:bg-ink hover:text-white">×</button>
-          <span className="text-[9px] font-extrabold uppercase tracking-[.15em] text-[#6f9653]">{view === 'login' ? 'Masuk akun' : view === 'register' ? 'Akun baru' : 'Verifikasi OTP'}</span>
-          <h2 id="auth-title" className={`${displayTitle} mb-3 mt-5 pr-10 text-[38px]`}>{title}</h2>
-          <p className="mb-7 max-w-[390px] text-xs leading-[1.7] text-[#6c7873]">{subtitle}</p>
-          {apiStatus === 'offline' && <div className="mb-5 border-l-[3px] border-warning bg-warning/10 px-4 py-3 text-[10px] leading-relaxed text-[#69501e]">Backend belum dapat dijangkau. Anda tetap dapat mengisi form, tetapi proses baru berhasil setelah FastAPI aktif.</div>}
-          {error && <div role="alert" className="mb-5 border-l-[3px] border-danger bg-danger/10 px-4 py-3 text-[10px] leading-relaxed text-[#8e3328]">{error}</div>}
-          {notice && <div role="status" className="mb-5 border-l-[3px] border-safe bg-safe/10 px-4 py-3 text-[10px] leading-relaxed text-[#286f50]">{notice}</div>}
+        <div className="relative overflow-y-auto p-10 max-sm:p-6">
+          <button type="button" disabled={loading} onClick={onClose} aria-label="Tutup dialog autentikasi" className="absolute right-5 top-5 grid size-9 place-items-center rounded-full border border-ink/10 text-xl font-light transition hover:bg-ink hover:text-white disabled:opacity-40">×</button>
+          <span className="text-[9px] font-extrabold uppercase tracking-[.15em] text-[#6f9653]">{copy[0]}</span>
+          <h2 id="auth-title" className={`${displayTitle} mb-3 mt-5 pr-10 text-[38px]`}>{copy[1]}</h2>
+          <p className="mb-7 max-w-[390px] text-xs leading-[1.7] text-[#6c7873]">{copy[2]}</p>
+          {apiStatus === 'offline' && <div className="mb-5 border-l-[3px] border-warning bg-warning/10 px-4 py-3 text-xs leading-relaxed text-[#69501e]">Layanan analisis belum dapat dijangkau. Form tetap dapat diisi dan akan diproses setelah layanan kembali tersedia.</div>}
+          {error && <div role="alert" className="mb-5 border-l-[3px] border-danger bg-danger/10 px-4 py-3 text-xs leading-relaxed text-[#8e3328]">{error}</div>}
+          {notice && <div role="status" className="mb-5 border-l-[3px] border-safe bg-safe/10 px-4 py-3 text-xs leading-relaxed text-[#286f50]">{notice}</div>}
           <form onSubmit={submit} className="grid gap-4">
             {view === 'register' && <label className="grid gap-2 text-[9px] font-extrabold uppercase tracking-[.09em]">Nama lengkap<input required autoFocus value={form.name} onChange={update('name')} autoComplete="name" className="h-12 border border-ink/15 bg-white px-4 text-[12px] font-normal normal-case tracking-normal outline-none transition focus:border-[#6f9653] focus:ring-2 focus:ring-[#6f9653]/15" placeholder="Nama Anda" /></label>}
-            <label className="grid gap-2 text-[9px] font-extrabold uppercase tracking-[.09em]">Email<input required autoFocus={view === 'login'} type="email" value={form.email} onChange={update('email')} disabled={view === 'verify'} autoComplete="email" className="h-12 border border-ink/15 bg-white px-4 text-[12px] font-normal normal-case tracking-normal outline-none transition focus:border-[#6f9653] focus:ring-2 focus:ring-[#6f9653]/15 disabled:bg-[#e8e8e0]" placeholder="nama@email.com" /></label>
-            {view !== 'verify' ? <label className="grid gap-2 text-[9px] font-extrabold uppercase tracking-[.09em]">Kata sandi<input required type="password" minLength="8" value={form.password} onChange={update('password')} autoComplete={view === 'register' ? 'new-password' : 'current-password'} className="h-12 border border-ink/15 bg-white px-4 text-[12px] font-normal normal-case tracking-normal outline-none transition focus:border-[#6f9653] focus:ring-2 focus:ring-[#6f9653]/15" placeholder="Minimal 8 karakter" /></label> : <label className="grid gap-2 text-[9px] font-extrabold uppercase tracking-[.09em]">Kode OTP<input required autoFocus inputMode="numeric" maxLength="10" value={form.otpCode} onChange={update('otpCode')} autoComplete="one-time-code" className="h-14 border border-ink/15 bg-white px-4 text-center text-xl font-black tracking-[.35em] outline-none transition focus:border-[#6f9653] focus:ring-2 focus:ring-[#6f9653]/15" placeholder="••••••" /></label>}
-            <button disabled={loading} className="mt-2 flex h-13 items-center justify-center gap-3 bg-ink text-[11px] font-extrabold text-white transition hover:-translate-y-px hover:bg-[#1b302a] disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><i className="spin size-3 rounded-full border-2 border-white/30 border-t-acid" />Memproses...</> : view === 'login' ? 'Masuk dan mulai pindai' : view === 'register' ? 'Daftar dan kirim OTP' : 'Verifikasi dan masuk'}</button>
+            <label className="grid gap-2 text-[9px] font-extrabold uppercase tracking-[.09em]">Email<input required autoFocus={view === 'login' || view === 'forgot'} type="email" value={form.email} onChange={update('email')} disabled={showOtp} autoComplete="email" className="h-12 border border-ink/15 bg-white px-4 text-[12px] font-normal normal-case tracking-normal outline-none transition focus:border-[#6f9653] focus:ring-2 focus:ring-[#6f9653]/15 disabled:bg-[#e8e8e0]" placeholder="nama@email.com" /></label>
+            {showPassword && <label className="grid gap-2 text-[9px] font-extrabold uppercase tracking-[.09em]">Kata sandi<input required type="password" minLength="8" value={form.password} onChange={update('password')} autoComplete={view === 'register' ? 'new-password' : 'current-password'} className="h-12 border border-ink/15 bg-white px-4 text-[12px] font-normal normal-case tracking-normal outline-none transition focus:border-[#6f9653] focus:ring-2 focus:ring-[#6f9653]/15" placeholder="Minimal 8 karakter" /></label>}
+            {showOtp && <label className="grid gap-2 text-[9px] font-extrabold uppercase tracking-[.09em]">Kode verifikasi<input required autoFocus inputMode="numeric" maxLength="10" value={form.otpCode} onChange={update('otpCode')} autoComplete="one-time-code" className="h-14 border border-ink/15 bg-white px-4 text-center text-xl font-black tracking-[.35em] outline-none transition focus:border-[#6f9653] focus:ring-2 focus:ring-[#6f9653]/15" placeholder="••••••" /></label>}
+            {view === 'reset' && <label className="grid gap-2 text-[9px] font-extrabold uppercase tracking-[.09em]">Kata sandi baru<input required type="password" minLength="8" value={form.newPassword} onChange={update('newPassword')} autoComplete="new-password" className="h-12 border border-ink/15 bg-white px-4 text-[12px] font-normal normal-case tracking-normal outline-none transition focus:border-[#6f9653] focus:ring-2 focus:ring-[#6f9653]/15" placeholder="Minimal 8 karakter" /></label>}
+            {view === 'login' && <button type="button" onClick={() => changeView('forgot')} className="-mt-1 justify-self-end text-[10px] font-bold text-[#638849]">Lupa kata sandi?</button>}
+            <button disabled={loading} className="mt-2 flex h-13 items-center justify-center gap-3 bg-ink text-[11px] font-extrabold text-white transition hover:-translate-y-px hover:bg-[#1b302a] disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><i className="spin size-3 rounded-full border-2 border-white/30 border-t-acid" />Memproses...</> : view === 'login' ? 'Masuk dan mulai pindai' : view === 'register' ? 'Daftar dan kirim kode' : view === 'verify' ? 'Verifikasi dan masuk' : view === 'forgot' ? 'Kirim kode pemulihan' : 'Simpan kata sandi baru'}</button>
           </form>
-          <div className="mt-6 flex items-center justify-between gap-4 text-[10px] text-[#6c7873]">{view === 'verify' ? <><button type="button" onClick={() => changeView('register')} className="font-bold text-ink">Ubah data</button><button type="button" disabled={loading} onClick={handleResend} className="font-bold text-[#638849]">Kirim ulang OTP</button></> : <><span>{view === 'login' ? 'Belum memiliki akun?' : 'Sudah memiliki akun?'}</span><button type="button" onClick={() => changeView(view === 'login' ? 'register' : 'login')} className="font-extrabold text-[#638849]">{view === 'login' ? 'Daftar sekarang' : 'Masuk di sini'}</button></>}</div>
+          <div className="mt-6 flex items-center justify-between gap-4 text-[10px] text-[#6c7873]">
+            {view === 'verify' && <><button type="button" onClick={() => changeView('register')} className="font-bold text-ink">Ubah data</button><button type="button" disabled={loading} onClick={handleResend} className="font-bold text-[#638849]">Kirim ulang kode</button></>}
+            {view === 'reset' && <><button type="button" onClick={() => changeView('login')} className="font-bold text-ink">Kembali masuk</button><button type="button" disabled={loading} onClick={handleResend} className="font-bold text-[#638849]">Kirim ulang kode</button></>}
+            {view === 'forgot' && <><span>Ingat kata sandi Anda?</span><button type="button" onClick={() => changeView('login')} className="font-extrabold text-[#638849]">Kembali masuk</button></>}
+            {(view === 'login' || view === 'register') && <><span>{view === 'login' ? 'Belum memiliki akun?' : 'Sudah memiliki akun?'}</span><button type="button" onClick={() => changeView(view === 'login' ? 'register' : 'login')} className="font-extrabold text-[#638849]">{view === 'login' ? 'Daftar sekarang' : 'Masuk di sini'}</button></>}
+          </div>
         </div>
       </section>
     </div>
@@ -296,7 +354,7 @@ function Hero() {
           <a href="#cara-kerja" className="group inline-flex items-center gap-2 border-b border-ink py-2 text-[13px] font-bold">Lihat cara kerja <span className="transition group-hover:translate-x-1 group-hover:translate-y-0.5">↘</span></a>
         </div>
         <div className="mt-16 grid grid-cols-3 gap-5 border-t border-ink/15 pt-6 max-sm:mt-12 max-sm:gap-2" aria-label="Statistik sistem">
-          {[['03', 'Jenis input'], ['JWT', 'Sesi terlindungi'], ['API', 'FastAPI backend']].map(([value, label]) => <div className="grid gap-1.5" key={label}><strong className="text-xl tracking-[-.04em] max-sm:text-[17px]">{value}</strong><span className="text-[10px] font-bold uppercase tracking-[.1em] text-[#71807a] max-sm:text-[8px]">{label}</span></div>)}
+          {[['03', 'Jenis pemeriksaan'], ['24/7', 'Siap digunakan'], ['01', 'Riwayat pribadi']].map(([value, label]) => <div className="grid gap-1.5" key={label}><strong className="text-xl tracking-[-.04em] max-sm:text-[17px]">{value}</strong><span className="text-[10px] font-bold uppercase tracking-[.1em] text-[#71807a] max-sm:text-[8px]">{label}</span></div>)}
         </div>
       </div>
       <Radar />
@@ -336,15 +394,15 @@ function ResultPanel({ result, onReset, loading, mode, scanPhase, onCopy }) {
         <div className="flex items-center justify-between"><span className="text-[9px] font-extrabold uppercase tracking-[.14em] text-[#92a09a]">Laporan #{result.reportId}</span><span className="rounded-full px-2.5 py-2 text-[8px] font-black uppercase tracking-[.09em]" style={{ background: config.color }}>{config.label}</span></div>
         <div className="my-6 grid grid-cols-[105px_1fr] items-center gap-5 max-sm:grid-cols-[89px_1fr] max-sm:gap-4">
           <div className="relative grid size-[105px] place-items-center rounded-full before:absolute before:inset-2 before:rounded-full before:bg-ink max-sm:size-[89px]" style={{ background: `conic-gradient(${config.color} 0deg ${result.score * 3.6}deg, #27342f ${result.score * 3.6}deg 360deg)` }}><div className="relative flex items-baseline"><strong className="text-3xl tracking-[-.06em] max-sm:text-[26px]">{result.score}</strong><small className="text-[9px] text-[#83908a]">/100</small></div></div>
-          <div><span className="text-[8px] font-extrabold tracking-[.13em] text-[#78857f]">SKOR RISIKO</span><h3 className={`${displayTitle} my-1 text-[25px]`}>{config.title}</h3><p className="text-[10px] leading-relaxed text-[#8e9b95]">{config.summary}</p></div>
+          <div><span className="text-[9px] font-extrabold tracking-[.13em] text-[#78857f]">{result.metricLabel?.toUpperCase() ?? 'SKOR RISIKO'}</span><h3 className={`${displayTitle} my-1 text-[25px]`}>{config.title}</h3><p className="text-[11px] leading-relaxed text-[#8e9b95]">{config.summary}</p></div>
         </div>
         <div className="border-t border-white/10">
-          {result.found.slice(0, 4).map((key) => { const [label, type] = SIGNALS[key] ?? [String(key), 'Model']; const safe = key === 'secure' || key === 'modelNormal'; return <div key={key} className="grid min-h-[42px] grid-cols-[20px_1fr_auto] items-center gap-2 border-b border-white/[.08] text-[10px]"><i className={`grid size-[17px] place-items-center rounded-full text-[9px] not-italic ${safe ? 'bg-safe/10 text-safe' : 'bg-danger/10 text-danger'}`}>{safe ? '✓' : '!'}</i><span>{label}</span><small className="text-[8px] uppercase tracking-[.08em] text-[#7f8c86]">{type}</small></div> })}
+          {result.found.slice(0, 4).map((key) => { const [label, type] = SIGNALS[key] ?? [String(key), 'Model']; const safe = key === 'secure' || key === 'modelNormal'; return <div key={key} className="grid min-h-[42px] grid-cols-[20px_1fr_auto] items-center gap-2 border-b border-white/[.08] text-[11px]"><i className={`grid size-[17px] place-items-center rounded-full text-[9px] not-italic ${safe ? 'bg-safe/10 text-safe' : 'bg-danger/10 text-danger'}`}>{safe ? '✓' : '!'}</i><span>{label}</span><small className="text-[9px] uppercase tracking-[.08em] text-[#7f8c86]">{type}</small></div> })}
         </div>
-        {result.source === 'model' && <div className="mt-3 flex items-center justify-between border border-white/[.08] px-3 py-2 text-[8px] uppercase tracking-[.08em] text-[#7f8c86]"><span>Keyakinan model</span><strong className="text-white">{result.confidence}% · {result.category ?? 'unknown'}</strong></div>}
-        <div className="mt-4 grid grid-cols-[25px_1fr] gap-2.5 bg-white/[.055] p-3"><span className="grid size-[22px] place-items-center rounded-full bg-acid text-[11px] font-black text-ink">!</span><p className="m-0 text-[9px] leading-relaxed text-[#aeb8b3]"><strong className="text-white">Saran Sentry</strong><br />{config.recommendation}</p></div>
-        <button onClick={() => setDetailsOpen((value) => !value)} aria-expanded={detailsOpen} className="mt-3 flex w-full items-center justify-between border-y border-white/[.08] py-3 text-left text-[9px] font-bold text-[#aeb8b3]"><span>Apa arti skor ini?</span><span className={`text-acid transition ${detailsOpen ? 'rotate-45' : ''}`}>+</span></button>
-        <div className={`grid transition-all duration-300 ${detailsOpen ? 'grid-rows-[1fr] pt-3 opacity-100' : 'grid-rows-[0fr] opacity-0'}`}><div className="overflow-hidden"><div className="relative h-1.5 rounded-full bg-[linear-gradient(90deg,#53d99f_0_34%,#ffb84d_34%_65%,#ff5d48_65%)]"><span className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-ink" style={{ left: `${result.score}%` }} /></div><div className="mt-2 flex justify-between text-[7px] uppercase tracking-[.08em] text-[#718079]"><span>0 Aman</span><span>35 Waspada</span><span>65 Berisiko</span><span>100</span></div></div></div>
+        {result.source === 'model' && <div className="mt-3 flex items-center justify-between border border-white/[.08] px-3 py-2 text-[9px] uppercase tracking-[.08em] text-[#7f8c86]"><span>Klasifikasi model</span><strong className="text-white">{result.category ?? 'Belum dikenali'}</strong></div>}
+        <div className="mt-4 grid grid-cols-[25px_1fr] gap-2.5 bg-white/[.055] p-3"><span className="grid size-[22px] place-items-center rounded-full bg-acid text-[11px] font-black text-ink">!</span><p className="m-0 text-[10px] leading-relaxed text-[#aeb8b3]"><strong className="text-white">Saran Sentry</strong><br />{config.recommendation}</p></div>
+        <button onClick={() => setDetailsOpen((value) => !value)} aria-expanded={detailsOpen} className="mt-3 flex w-full items-center justify-between border-y border-white/[.08] py-3 text-left text-[10px] font-bold text-[#aeb8b3]"><span>Apa arti angka ini?</span><span className={`text-acid transition ${detailsOpen ? 'rotate-45' : ''}`}>+</span></button>
+        <div className={`grid transition-all duration-300 ${detailsOpen ? 'grid-rows-[1fr] pt-3 opacity-100' : 'grid-rows-[0fr] opacity-0'}`}><div className="overflow-hidden">{result.metric === 'confidence' ? <p className="text-[10px] leading-relaxed text-[#93a09a]">Keyakinan menunjukkan seberapa yakin model terhadap klasifikasi di atas, bukan persentase kemungkinan konten berbahaya.</p> : <><div className="relative h-1.5 rounded-full bg-[linear-gradient(90deg,#53d99f_0_34%,#ffb84d_34%_65%,#ff5d48_65%)]"><span className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-ink" style={{ left: `${result.score}%` }} /></div><div className="mt-2 flex justify-between text-[7px] uppercase tracking-[.08em] text-[#718079]"><span>0 Aman</span><span>35 Waspada</span><span>65 Berisiko</span><span>100</span></div></>}</div></div>
         <div className="mt-4 grid grid-cols-[1fr_auto] gap-2"><button onClick={onReset} className="flex min-h-10 items-center justify-between bg-acid px-3 text-[10px] font-extrabold text-ink">Periksa ancaman lain <span>↗</span></button><button onClick={onCopy} aria-label="Salin ringkasan hasil" className="grid size-10 place-items-center border border-white/15 text-[#aeb8b3] transition hover:border-acid hover:text-acid"><svg viewBox="0 0 20 20" className="size-4 fill-none stroke-current stroke-[1.5]"><rect x="6" y="6" width="10" height="10" rx="1" /><path d="M4 13H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v1" /></svg></button></div>
       </div>
     </aside>
@@ -353,8 +411,8 @@ function ResultPanel({ result, onReset, loading, mode, scanPhase, onCopy }) {
 
 function ScanningPanel({ mode, phase }) {
   const phaseCopy = mode === 'image'
-    ? ['Mengamankan gambar', 'Membaca teks & elemen visual', 'Menyusun skor risiko']
-    : ['Mengamankan input', 'Mencocokkan pola ancaman', 'Menyusun skor risiko']
+    ? ['Mengamankan gambar', 'Membaca teks & elemen visual', 'Menyusun hasil analisis']
+    : ['Mengamankan input', 'Mencocokkan pola ancaman', 'Menyusun hasil analisis']
 
   return (
     <aside id="result-card" aria-live="polite" className="relative min-h-[485px] overflow-hidden rounded-3xl bg-ink text-white shadow-[0_30px_80px_rgba(5,15,12,.15)]">
@@ -490,7 +548,7 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired }) {
     const config = LEVELS[result.level] ?? LEVELS.medium
     const findings = result.found.map((key) => (SIGNALS[key] ?? [String(key)])[0]).join(', ')
     try {
-      await navigator.clipboard.writeText(`Sentry — ${config.label} (${result.score}/100)\nTemuan: ${findings}\nSaran: ${config.recommendation}`)
+      await navigator.clipboard.writeText(`Sentry — ${config.label}\n${result.metricLabel ?? 'Skor risiko'}: ${result.score}/100\nTemuan: ${findings}\nSaran: ${config.recommendation}`)
       notify('Ringkasan hasil berhasil disalin.')
     } catch {
       notify('Ringkasan tidak dapat disalin di browser ini.')
@@ -509,27 +567,27 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired }) {
   const hasEvidence = mode === 'url' ? Boolean(url.trim()) : mode === 'message' ? Boolean(message.trim()) : Boolean(imageFile)
   const currentStep = result ? 3 : hasEvidence || loading ? 2 : 1
   const modeHelp = {
-    url: ['Tempel alamat website', 'Boleh dengan atau tanpa https://. Jangan buka tautannya terlebih dahulu.'],
+    url: ['Tempel alamat website', 'Fitur beta: alamat dibaca sebagai teks untuk menemukan pola mencurigakan; reputasi domain belum diperiksa.'],
     message: ['Tempel seluruh isi pesan', 'Sertakan judul dan isi agar pola bahasa lebih mudah dikenali.'],
-    image: ['Unggah screenshot utuh', 'Pastikan alamat, logo, dan isi pesan terlihat jelas di dalam gambar.'],
+    image: ['Unggah screenshot utuh', 'Fitur beta: pastikan alamat, logo, dan isi pesan terlihat jelas. Hasil OCR tetap perlu Anda periksa.'],
   }[mode]
   const tabBase = 'flex min-h-[53px] items-center justify-center gap-2.5 rounded-xl text-xs font-bold transition max-sm:text-[10px]'
   return (
-    <section id="scanner" className={`${shell} border-t border-ink/15 py-[110px] max-sm:py-[85px]`} aria-labelledby="scanner-title">
+    <section id="scanner" className={`${shell} scroll-mt-[88px] border-t border-ink/15 py-[110px] max-sm:scroll-mt-[74px] max-sm:py-[85px]`} aria-labelledby="scanner-title">
       <div className="mb-12 flex items-end justify-between gap-12 max-sm:flex-col max-sm:items-start max-sm:gap-5">
         <div><Eyebrow number="02">Threat scanner</Eyebrow><h2 id="scanner-title" className={`${displayTitle} text-[clamp(45px,5vw,70px)] max-sm:text-[46px]`}>Ada yang terasa janggal?</h2></div>
-        <p className="mb-1 max-w-[430px] text-sm leading-[1.7] text-[#69756f]">Periksa tautan, isi pesan, atau screenshot. {IS_API_ENABLED ? 'Hasil dianalisis oleh model backend dan tersimpan di riwayat akun Anda.' : 'Mode demo diproses lokal tanpa mengunggah data.'}</p>
+        <p className="mb-1 max-w-[430px] text-sm leading-[1.7] text-[#69756f]">Periksa tautan, isi pesan, atau screenshot. {IS_API_ENABLED ? 'Hasil dianalisis otomatis dan tersimpan di riwayat akun Anda.' : 'Mode demo diproses lokal tanpa mengunggah data.'}</p>
       </div>
       <ScanJourney currentStep={currentStep} />
       <div className="grid grid-cols-[1.15fr_.85fr] items-stretch gap-[18px] max-[960px]:grid-cols-1">
         <div className="overflow-hidden rounded-3xl border border-ink/10 bg-white shadow-[0_30px_80px_rgba(5,15,12,.15)]">
           <div className="m-[7px] grid grid-cols-3 rounded-[17px] bg-[#e5e5dc] p-[7px]" role="tablist" aria-label="Jenis analisis">
-            <button type="button" role="tab" aria-selected={mode === 'url'} onClick={() => changeMode('url')} className={`${tabBase} ${mode === 'url' ? 'bg-white text-ink shadow-[0_5px_15px_rgba(12,24,20,.08)]' : 'text-[#6e7874]'}`}><LinkIcon className="size-[18px]" /><span><span className="max-sm:hidden">Periksa </span>URL</span></button>
+            <button type="button" role="tab" aria-selected={mode === 'url'} onClick={() => changeMode('url')} className={`${tabBase} ${mode === 'url' ? 'bg-white text-ink shadow-[0_5px_15px_rgba(12,24,20,.08)]' : 'text-[#6e7874]'}`}><LinkIcon className="size-[18px]" /><span><span className="max-sm:hidden">Periksa </span>URL</span><small className="rounded-full bg-warning/20 px-1.5 py-0.5 text-[7px] uppercase text-[#8a5c12]">Beta</small></button>
             <button type="button" role="tab" aria-selected={mode === 'message'} onClick={() => changeMode('message')} className={`${tabBase} ${mode === 'message' ? 'bg-white text-ink shadow-[0_5px_15px_rgba(12,24,20,.08)]' : 'text-[#6e7874]'}`}><MailIcon className="size-[18px]" /><span><span className="max-sm:hidden">Analisis </span>Pesan</span></button>
-            <button type="button" role="tab" aria-selected={mode === 'image'} onClick={() => changeMode('image')} className={`${tabBase} ${mode === 'image' ? 'bg-white text-ink shadow-[0_5px_15px_rgba(12,24,20,.08)]' : 'text-[#6e7874]'}`}><ImageIcon className="size-[18px]" />Screenshot</button>
+            <button type="button" role="tab" aria-selected={mode === 'image'} onClick={() => changeMode('image')} className={`${tabBase} ${mode === 'image' ? 'bg-white text-ink shadow-[0_5px_15px_rgba(12,24,20,.08)]' : 'text-[#6e7874]'}`}><ImageIcon className="size-[18px]" />Screenshot<small className="rounded-full bg-warning/20 px-1.5 py-0.5 text-[7px] uppercase text-[#8a5c12] max-sm:hidden">Beta</small></button>
           </div>
           <div className="px-[37px] pb-7 pt-6 max-sm:px-5 max-sm:pb-6 max-sm:pt-5">
-            <div className="mb-5 flex items-start gap-3 rounded-xl bg-[#f1f3ed] p-3.5"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-ink text-[9px] font-black text-acid">02</span><div><strong className="block text-[11px] text-ink">{modeHelp[0]}</strong><p className="mt-1 text-[9px] leading-relaxed text-[#74807b]">{modeHelp[1]}</p></div></div>
+            <div className="mb-5 flex items-start gap-3 rounded-xl bg-[#f1f3ed] p-3.5"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-ink text-[9px] font-black text-acid">02</span><div><strong className="block text-[11px] text-ink">{modeHelp[0]}</strong><p className="mt-1 text-[10px] leading-relaxed text-[#74807b]">{modeHelp[1]}</p></div></div>
             <div className="mb-3 flex items-center justify-between"><label htmlFor={mode === 'url' ? 'url-input' : mode === 'message' ? 'message-input' : 'image-input'} className="text-[11px] font-extrabold uppercase tracking-[.09em]">{mode === 'url' ? 'Alamat website' : mode === 'message' ? 'Isi pesan mencurigakan' : 'Screenshot mencurigakan'}</label><button onClick={mode === 'image' && imageFile ? clearImage : useSample} className="border-b border-[#a5ada9] bg-transparent pb-1 text-[10px] font-bold text-[#65716c]">{mode === 'image' && imageFile ? 'Hapus gambar' : 'Gunakan contoh'}</button></div>
             {mode === 'url' ? (
               <div className="flex min-h-[69px] items-center border border-[#c9cdc8] bg-[#f7f7f3] px-4 transition focus-within:border-[#6b8e4f] focus-within:shadow-[0_0_0_3px_rgba(107,142,79,.12)]">
@@ -544,12 +602,12 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired }) {
                 {previewUrl ? <><img src={previewUrl} alt="Preview screenshot yang akan dianalisis" className="h-[230px] w-full object-contain" /><div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-ink/90 px-4 py-3 text-[9px] text-white backdrop-blur"><span className="max-w-[70%] truncate">{imageFile?.name}</span><span>{(imageFile.size / 1024 / 1024).toFixed(2)} MB</span></div></> : <button type="button" onClick={() => fileRef.current?.click()} className="absolute inset-0 flex w-full flex-col items-center justify-center bg-transparent px-5 text-center"><span className="mb-4 grid size-14 place-items-center rounded-full border border-[#88a371] bg-white text-[#6f9653]"><ImageIcon className="size-6" /></span><strong className="text-sm">Tarik screenshot ke sini</strong><span className="mt-1.5 text-[10px] text-[#7e8984]">atau klik untuk memilih dari perangkat</span></button>}
               </div>
             )}
-            <p className="my-3 flex items-center gap-2 text-[10px] text-[#858f89]"><span className="grid size-[15px] shrink-0 place-items-center rounded-full border border-[#a7ada9] font-serif text-[9px]">i</span>{mode === 'image' ? `PNG, JPG, atau WebP — maksimum 8 MB.${IS_API_ENABLED ? ' File akan dikirim ke backend Anda.' : ' Preview tetap lokal.'}` : 'Hindari memasukkan kata sandi atau data pribadi sensitif.'}</p>
+            <p className="my-3 flex items-center gap-2 text-[11px] text-[#75807b]"><span className="grid size-[15px] shrink-0 place-items-center rounded-full border border-[#a7ada9] font-serif text-[9px]">i</span>{mode === 'image' ? `PNG, JPG, atau WebP — maksimum 8 MB.${IS_API_ENABLED ? ' File dikirim ke layanan analisis.' : ' Preview tetap lokal.'}` : 'Hindari memasukkan kata sandi atau data pribadi sensitif.'}</p>
             <button disabled={loading} onClick={scan} className="mt-[18px] flex h-[58px] w-full items-center justify-center bg-ink text-xs font-extrabold text-white transition hover:-translate-y-px hover:bg-[#1b302a] disabled:cursor-wait">
               {loading ? <span className="flex items-center gap-3"><i className="spin size-3.5 rounded-full border-2 border-white/30 border-t-acid" />{mode === 'image' ? 'Membaca screenshot...' : 'Membaca sinyal...'}</span> : <span className="flex items-center gap-2.5"><SearchIcon className="size-[17px] text-acid" />{mode === 'image' ? 'Analisis screenshot' : 'Mulai analisis'}</span>}
             </button>
           </div>
-          <div className="flex min-h-[52px] items-center justify-between gap-4 border-t border-[#e6e6df] px-[37px] py-2 text-[9px] uppercase tracking-[.06em] text-[#818b86] max-sm:px-5"><span className="flex items-center gap-2 text-[#6f9653]"><ShieldIcon className="size-3.5" /><span className="text-[#818b86]">{IS_API_ENABLED ? session.user ? `Sesi ${session.user.name?.split(' ')[0]}` : 'Login diperlukan' : 'Demo lokal'}</span></span><span className="flex items-center gap-2 max-sm:hidden"><i className={`size-1.5 rounded-full ${apiStatus === 'online' ? 'bg-safe' : apiStatus === 'offline' ? 'bg-danger' : 'bg-warning'}`} />Model <strong className="text-[#56625d]">{IS_API_ENABLED ? apiStatus : 'lokal'}</strong></span></div>
+          <div className="flex min-h-[52px] items-center justify-between gap-4 border-t border-[#e6e6df] px-[37px] py-2 text-[10px] uppercase tracking-[.06em] text-[#818b86] max-sm:px-5"><span className="flex items-center gap-2 text-[#6f9653]"><ShieldIcon className="size-3.5" /><span className="text-[#818b86]">{IS_API_ENABLED ? session.user ? `Sesi ${session.user.name?.split(' ')[0]}` : 'Masuk untuk menyimpan hasil' : 'Demo lokal'}</span></span><span className="flex items-center gap-2 max-sm:hidden"><i className={`size-1.5 rounded-full ${apiStatus === 'online' ? 'bg-safe' : apiStatus === 'offline' ? 'bg-danger' : 'bg-warning'}`} /><strong className="text-[#56625d]">{IS_API_ENABLED ? apiStatus === 'online' ? 'Layanan siap' : apiStatus === 'offline' ? 'Layanan terganggu' : 'Memeriksa layanan' : 'Analisis lokal'}</strong></span></div>
         </div>
         <ResultPanel result={result} loading={loading} mode={mode} scanPhase={scanPhase} onCopy={copySummary} onReset={() => { setResult(null); if (mode !== 'image') (mode === 'url' ? urlRef.current : messageRef.current)?.focus() }} />
       </div>
@@ -561,12 +619,12 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired }) {
 const METHODS = [
   { title: 'Jejak digital', text: 'Menilai struktur URL, domain tiruan, pola redirect, dan karakter yang disamarkan.', icon: <><circle cx="14" cy="14" r="10" /><path d="M4 14h20M14 4c3 3 4.5 6.3 4.5 10S17 21 14 24c-3-3-4.5-6.3-4.5-10S11 7 14 4Z" /></> },
   { title: 'Bahasa manipulatif', text: 'Mendeteksi urgensi palsu, hadiah fiktif, ancaman akun, serta permintaan kredensial.', icon: <><path d="M5 7h18v14H5zM8 11h7M8 15h12M8 18h9" /><path d="m19 5 4 4" /></> },
-  { title: 'Putusan risiko', text: 'Menggabungkan seluruh sinyal menjadi skor transparan dan saran tindakan yang jelas.', icon: <><path d="M14 3 24 7v7c0 6-4.2 9.5-10 11-5.8-1.5-10-5-10-11V7l10-4Z" /><path d="m9 14 3 3 7-7" /></> },
+  { title: 'Putusan risiko', text: 'Menggabungkan seluruh sinyal menjadi hasil yang mudah dipahami beserta saran tindakan.', icon: <><path d="M14 3 24 7v7c0 6-4.2 9.5-10 11-5.8-1.5-10-5-10-11V7l10-4Z" /><path d="m9 14 3 3 7-7" /></> },
 ]
 
 function MethodSection() {
   return (
-    <section id="cara-kerja" className={`${shell} grid grid-cols-[.7fr_1.3fr] gap-[100px] border-t border-ink/15 py-[125px] max-[960px]:grid-cols-1 max-[960px]:gap-16 max-sm:py-[85px]`} aria-labelledby="method-title">
+    <section id="cara-kerja" className={`${shell} scroll-mt-[88px] grid grid-cols-[.7fr_1.3fr] gap-[100px] border-t border-ink/15 py-[125px] max-[960px]:grid-cols-1 max-[960px]:gap-16 max-sm:scroll-mt-[74px] max-sm:py-[85px]`} aria-labelledby="method-title">
       <div className="sticky top-9 self-start max-[960px]:static"><Eyebrow number="03">Di balik layar</Eyebrow><h2 id="method-title" className={`${displayTitle} text-[clamp(45px,5vw,70px)] max-sm:text-[46px]`}>Tiga lapis.<br />Satu keputusan.</h2><p className="my-7 max-w-[360px] text-[13px] leading-[1.75] text-[#68736f]">Setiap input melewati pemeriksaan struktur, konteks bahasa, dan pola ancaman untuk menghasilkan keputusan yang dapat dipahami.</p><a href="#scanner" className="inline-flex items-center gap-2 border-b border-ink py-2 text-[13px] font-bold">Coba pemindai <span>→</span></a></div>
       <div className="border-t border-ink/15">{METHODS.map((item, index) => <article key={item.title} className="grid min-h-[190px] grid-cols-[55px_75px_1fr] items-center gap-6 border-b border-ink/15 transition hover:bg-white/30 hover:px-3.5 max-sm:min-h-[180px] max-sm:grid-cols-[35px_58px_1fr] max-sm:gap-4"><span className="self-start pt-9 text-[9px] font-extrabold text-[#88928e]">0{index + 1}</span><div className="grid size-[67px] place-items-center rounded-full bg-[#e3e3da] max-sm:size-[54px]"><svg className="size-7 fill-none stroke-ink stroke-[1.4]" viewBox="0 0 28 28">{item.icon}</svg></div><div><h3 className={`${displayTitle} mb-2 text-[23px] max-sm:text-xl`}>{item.title}</h3><p className="text-xs leading-relaxed text-[#69756f]">{item.text}</p></div></article>)}</div>
     </section>
@@ -576,7 +634,7 @@ function MethodSection() {
 function Insights() {
   const base = 'group flex min-h-[440px] flex-col overflow-hidden border p-[31px] transition duration-300 hover:-translate-y-2'
   return (
-    <section id="wawasan" className="bg-forest py-[120px] text-white max-sm:py-[85px]" aria-labelledby="insight-title"><div className={shell}>
+    <section id="wawasan" className="scroll-mt-[88px] bg-forest py-[120px] text-white max-sm:scroll-mt-[74px] max-sm:py-[85px]" aria-labelledby="insight-title"><div className={shell}>
       <div className="mb-12 flex items-end justify-between gap-12 max-sm:flex-col max-sm:items-start max-sm:gap-5"><div><Eyebrow number="04" light>Kenali polanya</Eyebrow><h2 id="insight-title" className={`${displayTitle} text-[clamp(45px,5vw,70px)] max-sm:text-[46px]`}>Ancaman berubah.<br />Prinsip aman tidak.</h2></div><p className="mb-1 max-w-[430px] text-sm leading-[1.7] text-[#80908a]">Tiga kebiasaan sederhana untuk menghentikan sebagian besar serangan rekayasa sosial sebelum terjadi.</p></div>
       <div className="grid grid-cols-3 gap-3.5 max-[960px]:grid-cols-2 max-sm:grid-cols-1">
         <article className={`${base} border-white/[.08] bg-[#111e1a] hover:border-acid/25`}><span className="text-[9px] font-extrabold uppercase tracking-[.13em] text-[#7c8c85]">01 / Periksa</span><h3 className={`${displayTitle} mb-4 mt-[75px] text-[31px] leading-none`}>Lihat sebelum<br />Anda menyentuh.</h3><p className="text-xs leading-[1.7] text-[#87958f]">Periksa ejaan domain dan tujuan tautan. Penyerang mengandalkan kemiripan yang luput dari perhatian.</p><div className="mt-auto flex h-12 items-center gap-2.5 border border-white/10 px-3.5 text-[10px] text-[#aab4b0]"><span className="text-danger">⚠</span><del>paypaI-secure.com</del></div></article>
@@ -589,15 +647,15 @@ function Insights() {
 
 const FAQS = [
   ['Saya sebaiknya memilih URL, Pesan, atau Screenshot?', 'Pilih URL untuk tautan website, Pesan untuk teks dari email/SMS/chat, dan Screenshot ketika informasi penting seperti logo, tampilan formulir, atau alamat situs hanya tersedia dalam gambar.'],
-  ['Apakah screenshot saya aman?', IS_API_ENABLED ? `Preview dibuat di browser, lalu file dikirim hanya ke backend yang dikonfigurasi di ${API_BASE_URL}. Hindari mengunggah data pribadi yang tidak diperlukan.` : 'Pada mode demo, preview dan analisis simulasi berjalan di browser dan file tidak diunggah.'],
-  ['Apakah risiko rendah berarti pasti aman?', 'Tidak. Skor rendah berarti sinyal berbahaya utama tidak ditemukan. Tetap verifikasi pengirim dan buka layanan melalui aplikasi atau alamat resmi yang Anda ketik sendiri.'],
+  ['Apakah screenshot saya aman?', IS_API_ENABLED ? 'Preview dibuat di perangkat Anda, lalu file dikirim ke layanan analisis yang telah dikonfigurasi. Hindari mengunggah data pribadi yang tidak diperlukan.' : 'Pada mode demo, preview dan analisis simulasi berjalan di browser dan file tidak diunggah.'],
+  ['Apakah risiko rendah berarti pasti aman?', 'Tidak. Hasil risiko rendah berarti sinyal berbahaya utama tidak ditemukan. Tetap verifikasi pengirim dan buka layanan melalui aplikasi atau alamat resmi yang Anda ketik sendiri.'],
   ['Apa yang harus dilakukan jika risikonya tinggi?', 'Jangan klik tautan atau membalas pesan. Tutup halaman, hubungi organisasi melalui kanal resmi, dan segera ganti kredensial jika sebelumnya sudah terlanjur memasukkannya.'],
 ]
 
 function HelpCenter() {
   const [openIndex, setOpenIndex] = useState(0)
   return (
-    <section id="bantuan" className={`${shell} grid grid-cols-[.72fr_1.28fr] gap-[90px] py-[120px] max-[960px]:grid-cols-1 max-[960px]:gap-12 max-sm:py-[85px]`} aria-labelledby="help-title">
+    <section id="bantuan" className={`${shell} scroll-mt-[88px] grid grid-cols-[.72fr_1.28fr] gap-[90px] py-[120px] max-[960px]:grid-cols-1 max-[960px]:gap-12 max-sm:scroll-mt-[74px] max-sm:py-[85px]`} aria-labelledby="help-title">
       <div><Eyebrow number="05">Pusat bantuan</Eyebrow><h2 id="help-title" className={`${displayTitle} text-[clamp(45px,5vw,70px)] max-sm:text-[46px]`}>Masih bingung?<br />Mulai di sini.</h2><p className="my-7 max-w-[360px] text-[13px] leading-[1.75] text-[#68736f]">Jawaban singkat untuk membantu Anda mengambil keputusan tanpa istilah keamanan yang rumit.</p><a href="#scanner" className="inline-flex min-h-11 items-center gap-3 bg-ink px-4 text-[11px] font-bold text-white transition hover:-translate-y-0.5">Buka pemindai <ArrowIcon className="size-4 text-acid" /></a></div>
       <div className="border-t border-ink/15">{FAQS.map(([question, answer], index) => { const open = openIndex === index; return <article key={question} className="border-b border-ink/15"><button onClick={() => setOpenIndex(open ? -1 : index)} aria-expanded={open} className="grid w-full grid-cols-[36px_1fr_auto] items-center gap-4 py-6 text-left"><span className={`grid size-8 place-items-center rounded-full text-[9px] font-black transition ${open ? 'bg-acid text-ink' : 'bg-[#e1e3da] text-[#6e7974]'}`}>0{index + 1}</span><strong className="text-[13px] leading-relaxed text-ink">{question}</strong><span className={`text-xl font-light transition ${open ? 'rotate-45' : ''}`}>+</span></button><div className={`grid transition-all duration-300 ${open ? 'grid-rows-[1fr] pb-6 opacity-100' : 'grid-rows-[0fr] opacity-0'}`}><div className="overflow-hidden pl-[52px] pr-10 text-xs leading-[1.8] text-[#69756f] max-sm:pl-0 max-sm:pr-4">{answer}</div></div></article> })}</div>
     </section>
@@ -605,19 +663,18 @@ function HelpCenter() {
 }
 
 function Footer() {
-  return <footer className="bg-paper pt-[75px]"><div className={`${shell} grid grid-cols-[1fr_1fr_.5fr] gap-20 pb-[70px] max-[960px]:grid-cols-1 max-[960px]:gap-9`}><div><Brand /><p className="mt-5 text-xs leading-relaxed text-[#69756f]">Lapisan tenang di antara Anda<br />dan ancaman digital.</p></div><div><span className="text-[9px] font-extrabold tracking-[.12em] text-[#6e7b76]">MODEL-INTEGRATED UI</span><p className="max-w-[390px] text-[11px] leading-[1.7] text-[#69756f]">Antarmuka terhubung ke FastAPI melalui autentikasi JWT. Hasil model tetap perlu diuji dan divalidasi sebelum dipakai untuk keputusan keamanan dunia nyata.</p></div><div className="flex flex-col gap-3.5 text-[11px] font-bold max-[960px]:flex-row max-[960px]:flex-wrap"><a href="#scanner">Pemindai</a><a href="#cara-kerja">Cara kerja</a><a href="#wawasan">Wawasan</a><a href="#bantuan">Bantuan</a></div></div><div className={`${shell} flex h-[65px] items-center justify-between border-t border-ink/15 text-[9px] uppercase tracking-[.08em] text-[#828d88]`}><span>© 2026 Sentry Labs</span><span className="max-sm:hidden">Dibuat untuk internet yang lebih aman.</span></div></footer>
+  return <footer className="bg-paper pt-[75px]"><div className={`${shell} grid grid-cols-[1fr_1fr_.5fr] gap-20 pb-[70px] max-[960px]:grid-cols-1 max-[960px]:gap-9`}><div><Brand /><p className="mt-5 text-xs leading-relaxed text-[#69756f]">Lapisan tenang di antara Anda<br />dan ancaman digital.</p></div><div><span className="text-[9px] font-extrabold tracking-[.12em] text-[#6e7b76]">ANALISIS BERBANTU MODEL</span><p className="max-w-[390px] text-[11px] leading-[1.7] text-[#69756f]">Hasil analisis adalah alat bantu, bukan jaminan keamanan. Selalu verifikasi identitas pengirim dan tujuan tautan melalui kanal resmi.</p></div><div className="flex flex-col gap-3.5 text-[11px] font-bold max-[960px]:flex-row max-[960px]:flex-wrap"><a href="#scanner">Pemindai</a><a href="#cara-kerja">Cara kerja</a><a href="#wawasan">Wawasan</a><a href="#bantuan">Bantuan</a></div></div><div className={`${shell} flex h-[65px] items-center justify-between border-t border-ink/15 text-[9px] uppercase tracking-[.08em] text-[#828d88]`}><span>© 2026 Sentry Labs</span><span className="max-sm:hidden">Dibuat untuk internet yang lebih aman.</span></div></footer>
 }
 
 export default function App() {
   const previewAuthView = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('auth') : null
-  const initialAuthView = ['login', 'register'].includes(previewAuthView) ? previewAuthView : 'login'
-  const [session, setSession] = useState(() => ({
-    accessToken: typeof window !== 'undefined' ? sessionStorage.getItem('sentry_access_token') ?? '' : '',
-    user: null,
-  }))
+  const authViews = ['login', 'register', 'forgot', 'reset']
+  const initialAuthView = authViews.includes(previewAuthView) ? previewAuthView : 'login'
+  const [session, setSession] = useState({ accessToken: '', user: null })
   const [apiStatus, setApiStatus] = useState(IS_API_ENABLED ? 'checking' : 'demo')
-  const [authOpen, setAuthOpen] = useState(['login', 'register'].includes(previewAuthView))
+  const [authOpen, setAuthOpen] = useState(authViews.includes(previewAuthView))
   const [authView, setAuthView] = useState(initialAuthView)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -627,52 +684,44 @@ export default function App() {
       const online = await checkApiConnection()
       if (!active) return
       setApiStatus(online ? 'online' : 'offline')
-
-      if (online && session.accessToken && !session.user) {
-        try {
-          const user = await getCurrentUser(session.accessToken)
-          if (active) setSession((current) => ({ ...current, user }))
-        } catch (error) {
-          if (error?.status === 401 || error?.status === 403) {
-            sessionStorage.removeItem('sentry_access_token')
-            if (active) setSession({ accessToken: '', user: null })
-          }
-        }
-      }
     }
 
     initialize()
     return () => { active = false }
-  }, [session.accessToken, session.user])
+  }, [])
 
-  const openAuth = (view = 'login') => {
+  const openAuth = useCallback((view = 'login') => {
+    setHistoryOpen(false)
     setAuthView(view)
     setAuthOpen(true)
-  }
+  }, [])
+  const closeAuth = useCallback(() => setAuthOpen(false), [])
+  const openHistory = useCallback(() => setHistoryOpen(true), [])
+  const closeHistory = useCallback(() => setHistoryOpen(false), [])
 
-  const authenticated = ({ accessToken, user }) => {
-    sessionStorage.setItem('sentry_access_token', accessToken)
+  const authenticated = useCallback(({ accessToken, user }) => {
     setSession({ accessToken, user })
     setApiStatus('online')
-  }
+  }, [])
 
-  const logout = () => {
-    sessionStorage.removeItem('sentry_access_token')
+  const logout = useCallback(() => {
+    setHistoryOpen(false)
     setSession({ accessToken: '', user: null })
-  }
+  }, [])
 
-  const expireSession = () => {
+  const expireSession = useCallback(() => {
     logout()
     openAuth('login')
-  }
+  }, [logout, openAuth])
 
   return (
     <>
       <div className="noise pointer-events-none fixed inset-0 z-50 opacity-[.025]" aria-hidden="true" />
-      <Header session={session} apiStatus={apiStatus} onOpenAuth={openAuth} onLogout={logout} />
+      <Header session={session} apiStatus={apiStatus} onOpenAuth={openAuth} onOpenHistory={openHistory} onLogout={logout} />
       <main id="top"><Hero /><Scanner session={session} apiStatus={apiStatus} onAuthRequired={() => openAuth('login')} onSessionExpired={expireSession} /><MethodSection /><Insights /><HelpCenter /></main>
       <Footer />
-      <AuthModal open={authOpen} initialView={authView} apiStatus={apiStatus} onClose={() => setAuthOpen(false)} onAuthenticated={authenticated} />
+      <HistoryDrawer open={historyOpen} accessToken={session.accessToken} onClose={closeHistory} onSessionExpired={expireSession} />
+      <AuthModal open={authOpen} initialView={authView} apiStatus={apiStatus} onClose={closeAuth} onAuthenticated={authenticated} />
     </>
   )
 }

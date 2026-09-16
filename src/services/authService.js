@@ -32,16 +32,16 @@ export function getCurrentUser(accessToken) {
   return apiRequest('/auth/me', { method: 'GET', accessToken })
 }
 
-export function getDetectionHistory(accessToken, page = 1, size = 10) {
-  return apiRequest(`/detection/history?page=${page}&size=${size}`, {
-    method: 'GET',
-    accessToken,
+export function forgotPassword(email) {
+  return apiRequest('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
   })
 }
 
-export function deleteDetection(accessToken, detectionId) {
-  return apiRequest(`/detection/history/${detectionId}`, {
-    method: 'DELETE',
-    accessToken,
+export function resetPassword({ email, otpCode, newPassword }) {
+  return apiRequest('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ email, otp_code: otpCode, new_password: newPassword }),
   })
 }
