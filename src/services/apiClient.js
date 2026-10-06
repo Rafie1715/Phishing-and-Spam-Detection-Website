@@ -32,7 +32,30 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_M
   }
 }
 
-export async function apiRequest(path, { accessToken, headers: customHeaders, timeoutMs, ...options } = {}) {
+let refreshPromise = null
+let accessTokenListener = null
+
+export function setAccessTokenListener(listener) {
+  accessTokenListener = listener
+}
+
+// Meminta access token baru memakai cookie refresh_token (httpOnly).
+// Permintaan yang bersamaan memakai satu proses refresh yang sama.
+export function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = apiRequest('/auth/refresh', { method: 'POST', skipRefresh: true })
+      .then((token) => {
+        accessTokenListener?.(token.access_token)
+        return token.access_token
+      })
+      .finally(() => {
+        refreshPromise = null
+      })
+  }
+  return refreshPromise
+}
+
+export async function apiRequest(path, { accessToken, headers: customHeaders, timeoutMs, skipRefresh = false, ...options } = {}) {
   if (!IS_API_ENABLED) throw new Error('API backend sedang dinonaktifkan.')
 
   const headers = new Headers(customHeaders)
@@ -49,6 +72,19 @@ export async function apiRequest(path, { accessToken, headers: customHeaders, ti
   } catch (error) {
     if (error instanceof Error && error.message.includes('terlalu lama')) throw error
     throw new Error('Layanan analisis belum dapat dijangkau. Periksa koneksi lalu coba kembali.')
+  }
+
+  // Access token kedaluwarsa: refresh sekali, lalu ulangi permintaan dengan token baru.
+  if (response.status === 401 && accessToken && !skipRefresh) {
+    let newAccessToken
+    try {
+      newAccessToken = await refreshAccessToken()
+    } catch {
+      newAccessToken = null
+    }
+    if (newAccessToken) {
+      return apiRequest(path, { ...options, headers: customHeaders, timeoutMs, accessToken: newAccessToken, skipRefresh: true })
+    }
   }
 
   const data = response.status === 204 ? null : await response.json().catch(() => null)

@@ -28,6 +28,10 @@ export function loginUser({ email, password }) {
   })
 }
 
+export function logoutUser() {
+  return apiRequest('/auth/logout', { method: 'POST' })
+}
+
 export function getCurrentUser(accessToken) {
   return apiRequest('/auth/me', { method: 'GET', accessToken })
 }

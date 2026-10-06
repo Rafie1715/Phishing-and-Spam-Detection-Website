@@ -50,6 +50,8 @@ function normalizeModelResult(data) {
     normal: 'modelNormal',
     promo: 'modelPromo',
     penipuan: 'modelScam',
+    phishing: 'modelPhishing',
+    legitimate: 'modelLegitimate',
   }[data.category] ?? 'modelUnknown'
 
   return {
@@ -94,10 +96,18 @@ export async function detectThreat({ mode, value = '', file = null, accessToken 
     }))
   }
 
-  const text = mode === 'url' ? `https://${value.replace(/^https?:\/\//i, '')}` : value
+  if (mode === 'url') {
+    const url = `https://${value.replace(/^https?:\/\//i, '')}`
+    return normalizeModelResult(await apiRequest('/detection/url', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+      accessToken,
+    }))
+  }
+
   return normalizeModelResult(await apiRequest('/detection/text', {
     method: 'POST',
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text: value }),
     accessToken,
   }))
 }

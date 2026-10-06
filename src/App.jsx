@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createDemoResult, detectThreat } from './services/detectionService.js'
-import { forgotPassword, getCurrentUser, loginUser, registerUser, resendOtp, resetPassword, verifyOtp } from './services/authService.js'
-import { IS_API_ENABLED, checkApiConnection } from './services/apiClient.js'
+import { forgotPassword, getCurrentUser, loginUser, logoutUser, registerUser, resendOtp, resetPassword, verifyOtp } from './services/authService.js'
+import { IS_API_ENABLED, checkApiConnection, refreshAccessToken, setAccessTokenListener } from './services/apiClient.js'
 import HistoryDrawer from './components/HistoryDrawer.jsx'
 import { useActiveSection } from './hooks/useActiveSection.js'
 
@@ -34,6 +34,8 @@ const SIGNALS = {
   modelNormal: ['Model mengklasifikasikan konten sebagai normal', 'Model'],
   modelPromo: ['Karakteristik promosi atau spam terdeteksi', 'Model'],
   modelScam: ['Karakteristik penipuan terdeteksi', 'Model'],
+  modelPhishing: ['Struktur URL menyerupai situs phishing', 'Model'],
+  modelLegitimate: ['Struktur URL tidak menunjukkan pola phishing', 'Model'],
   modelUnknown: ['Model mengembalikan kategori belum dikenal', 'Model'],
 }
 
@@ -680,14 +682,33 @@ export default function App() {
     let active = true
     if (!IS_API_ENABLED) return undefined
 
+    // Token baru hasil auto-refresh di apiClient disimpan ke session.
+    setAccessTokenListener((accessToken) => {
+      if (active) setSession((current) => ({ ...current, accessToken }))
+    })
+
+    const restoreSession = async () => {
+      try {
+        const accessToken = await refreshAccessToken()
+        const user = await getCurrentUser(accessToken)
+        if (active) setSession({ accessToken, user })
+      } catch {
+        // Tidak ada sesi tersimpan; pengguna tetap sebagai tamu.
+      }
+    }
+
     const initialize = async () => {
       const online = await checkApiConnection()
       if (!active) return
       setApiStatus(online ? 'online' : 'offline')
+      if (online) restoreSession()
     }
 
     initialize()
-    return () => { active = false }
+    return () => {
+      active = false
+      setAccessTokenListener(null)
+    }
   }, [])
 
   const openAuth = useCallback((view = 'login') => {
@@ -704,15 +725,21 @@ export default function App() {
     setApiStatus('online')
   }, [])
 
-  const logout = useCallback(() => {
+  const clearSession = useCallback(() => {
     setHistoryOpen(false)
     setSession({ accessToken: '', user: null })
   }, [])
 
+  const logout = useCallback(() => {
+    clearSession()
+    // Hapus cookie refresh_token agar sesi tidak dipulihkan saat halaman dimuat ulang.
+    if (IS_API_ENABLED) logoutUser().catch(() => {})
+  }, [clearSession])
+
   const expireSession = useCallback(() => {
-    logout()
+    clearSession()
     openAuth('login')
-  }, [logout, openAuth])
+  }, [clearSession, openAuth])
 
   return (
     <>
