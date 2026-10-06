@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+<<<<<<< HEAD
 import { createDemoResult, detectThreat, MAX_IMAGE_BYTES, MAX_IMAGE_SIZE_MB } from './services/detectionService.js'
 import { forgotPassword, getCurrentUser, loginUser, logoutUser, registerUser, resendOtp, resetPassword, verifyOtp } from './services/authService.js'
 import { IS_API_ENABLED, checkApiConnection } from './services/apiClient.js'
+=======
+import { createDemoResult, detectThreat } from './services/detectionService.js'
+import { forgotPassword, getCurrentUser, loginUser, logoutUser, registerUser, resendOtp, resetPassword, verifyOtp } from './services/authService.js'
+import { IS_API_ENABLED, checkApiConnection, refreshAccessToken, setAccessTokenListener } from './services/apiClient.js'
+>>>>>>> 4ae5a15ac0841ee2cacd6e1b4b1c101db34e3819
 import HistoryDrawer from './components/HistoryDrawer.jsx'
 import { useActiveSection } from './hooks/useActiveSection.js'
 import { Hero, MethodSection, Insights, HelpCenter, Footer } from './components/EditorialSections.jsx'
@@ -34,6 +40,8 @@ const SIGNALS = {
   modelNormal: ['Model mengklasifikasikan konten sebagai normal', 'Model'],
   modelPromo: ['Karakteristik promosi atau spam terdeteksi', 'Model'],
   modelScam: ['Karakteristik penipuan terdeteksi', 'Model'],
+  modelPhishing: ['Struktur URL menyerupai situs phishing', 'Model'],
+  modelLegitimate: ['Struktur URL tidak menunjukkan pola phishing', 'Model'],
   modelUnknown: ['Model mengembalikan kategori belum dikenal', 'Model'],
 }
 
@@ -528,15 +536,39 @@ export default function App() {
     if (!IS_API_ENABLED) return undefined
     setApiStatus('checking')
 
+    // Token baru hasil auto-refresh di apiClient disimpan ke session.
+    setAccessTokenListener((accessToken) => {
+      if (active) setSession((current) => ({ ...current, accessToken }))
+    })
+
+    const restoreSession = async () => {
+      try {
+        const accessToken = await refreshAccessToken()
+        const user = await getCurrentUser(accessToken)
+        if (active) setSession({ accessToken, user })
+      } catch {
+        // Tidak ada sesi tersimpan; pengguna tetap sebagai tamu.
+      }
+    }
+
     const initialize = async () => {
       const online = await checkApiConnection()
       if (!active) return
       setApiStatus(online ? 'online' : 'offline')
+      if (online) restoreSession()
     }
 
     initialize()
+<<<<<<< HEAD
     return () => { active = false }
   }, [connectionAttempt])
+=======
+    return () => {
+      active = false
+      setAccessTokenListener(null)
+    }
+  }, [])
+>>>>>>> 4ae5a15ac0841ee2cacd6e1b4b1c101db34e3819
 
   const openAuth = useCallback((view = 'login') => {
     setHistoryOpen(false)
@@ -558,6 +590,7 @@ export default function App() {
     setSession({ accessToken: '', user: null })
   }, [])
 
+<<<<<<< HEAD
   const logout = useCallback(async () => {
     clearSession()
     try {
@@ -565,6 +598,12 @@ export default function App() {
     } catch {
       setAccountNotice('Anda sudah keluar dari halaman ini, tetapi sesi di server belum dapat diakhiri. Coba keluar lagi setelah koneksi pulih.')
     }
+=======
+  const logout = useCallback(() => {
+    clearSession()
+    // Hapus cookie refresh_token agar sesi tidak dipulihkan saat halaman dimuat ulang.
+    if (IS_API_ENABLED) logoutUser().catch(() => {})
+>>>>>>> 4ae5a15ac0841ee2cacd6e1b4b1c101db34e3819
   }, [clearSession])
 
   const expireSession = useCallback(() => {
