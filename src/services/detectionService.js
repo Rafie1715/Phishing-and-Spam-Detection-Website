@@ -1,5 +1,9 @@
 import { apiRequest, IS_API_ENABLED } from './apiClient.js'
 
+// Leave room for multipart headers below Vercel's 4.5 MB request limit.
+export const MAX_IMAGE_SIZE_MB = 4
+export const MAX_IMAGE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
+
 function mockTextAnalysis(value, mode) {
   const text = value.toLowerCase()
   const found = []
@@ -39,6 +43,11 @@ function buildResult(score, found, source = 'demo') {
 }
 
 function normalizeModelResult(data) {
+  if (!data || !['safe', 'suspicious', 'scam'].includes(data.verdict)
+    || typeof data.confidence_score !== 'number' || !Number.isFinite(data.confidence_score)
+    || data.confidence_score < 0 || data.confidence_score > 1) {
+    throw new Error('Format hasil analisis tidak valid. Silakan coba lagi.')
+  }
   const confidence = Math.max(0, Math.min(1, Number(data.confidence_score ?? 0)))
   const level = { safe: 'low', suspicious: 'medium', scam: 'high' }[data.verdict] ?? 'medium'
   const rawRiskScore = Number(data.risk_score)
@@ -85,6 +94,12 @@ export async function detectThreat({ mode, value = '', file = null, accessToken 
   }
 
   if (mode === 'image') {
+    if (!(file instanceof Blob) || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      throw new Error('Pilih gambar PNG, JPG, atau WebP yang valid.')
+    }
+    if (!file.size || file.size > MAX_IMAGE_BYTES) {
+      throw new Error(`Gambar harus berisi data dan berukuran maksimal ${MAX_IMAGE_SIZE_MB} MB.`)
+    }
     const body = new FormData()
     body.append('file', file)
     return normalizeModelResult(await apiRequest('/detection/image', {
@@ -94,7 +109,7 @@ export async function detectThreat({ mode, value = '', file = null, accessToken 
     }))
   }
 
-  const text = mode === 'url' ? `https://${value.replace(/^https?:\/\//i, '')}` : value
+  const text = mode === 'url' && !/^https?:\/\//i.test(value.trim()) ? `https://${value.trim()}` : value.trim()
   return normalizeModelResult(await apiRequest('/detection/text', {
     method: 'POST',
     body: JSON.stringify({ text }),

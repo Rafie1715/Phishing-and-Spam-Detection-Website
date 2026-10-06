@@ -32,6 +32,10 @@ export function getCurrentUser(accessToken) {
   return apiRequest('/auth/me', { method: 'GET', accessToken })
 }
 
+export function logoutUser() {
+  return apiRequest('/auth/logout', { method: 'POST' })
+}
+
 export function forgotPassword(email) {
   return apiRequest('/auth/forgot-password', {
     method: 'POST',
