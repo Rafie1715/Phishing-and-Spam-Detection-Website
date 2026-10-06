@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-<<<<<<< HEAD
 import { createDemoResult, detectThreat, MAX_IMAGE_BYTES, MAX_IMAGE_SIZE_MB } from './services/detectionService.js'
 import { forgotPassword, getCurrentUser, loginUser, logoutUser, registerUser, resendOtp, resetPassword, verifyOtp } from './services/authService.js'
-import { IS_API_ENABLED, checkApiConnection } from './services/apiClient.js'
-=======
-import { createDemoResult, detectThreat } from './services/detectionService.js'
-import { forgotPassword, getCurrentUser, loginUser, logoutUser, registerUser, resendOtp, resetPassword, verifyOtp } from './services/authService.js'
-import { IS_API_ENABLED, checkApiConnection, refreshAccessToken, setAccessTokenListener } from './services/apiClient.js'
->>>>>>> 4ae5a15ac0841ee2cacd6e1b4b1c101db34e3819
+import { IS_API_ENABLED, checkApiConnection, refreshAccessToken, setAccessTokenListener, invalidateAccessToken } from './services/apiClient.js'
 import HistoryDrawer from './components/HistoryDrawer.jsx'
 import { useActiveSection } from './hooks/useActiveSection.js'
 import { Hero, MethodSection, Insights, HelpCenter, Footer } from './components/EditorialSections.jsx'
@@ -255,7 +249,7 @@ function AuthModal({ open, initialView, apiStatus, onClose, onAuthenticated }) {
           <ResultBackdrop />
           <div className="relative z-10 flex h-full min-h-[450px] flex-col">
             <Brand />
-            <div className="my-auto"><span className="text-[9px] font-extrabold uppercase tracking-[.16em] text-acid">Ruang pribadi</span><h2 className={`${displayTitle} mt-4 text-[42px]`}>Analisis privat.<br />Riwayat personal.</h2><p className="mt-5 max-w-[290px] text-xs leading-[1.8] text-[#91a09a]">Sesi Anda hanya bertahan selama halaman ini dibuka. Tutup atau muat ulang halaman untuk mengakhirinya.</p></div>
+            <div className="my-auto"><span className="text-[9px] font-extrabold uppercase tracking-[.16em] text-acid">Ruang pribadi</span><h2 className={`${displayTitle} mt-4 text-[42px]`}>Analisis privat.<br />Riwayat personal.</h2><p className="mt-5 max-w-[290px] text-xs leading-[1.8] text-[#91a09a]">Sesi dapat dipulihkan selama cookie akun masih berlaku. Gunakan tombol Keluar untuk mengakhiri sesi, terutama di perangkat bersama.</p></div>
             <div className="flex items-center gap-2 border-t border-white/10 pt-5 text-[10px] uppercase tracking-[.1em] text-[#91a09a]"><span className={`size-2 rounded-full ${apiStatus === 'online' ? 'bg-safe' : 'bg-danger'}`} />{apiStatus === 'online' ? 'Layanan analisis siap' : 'Layanan analisis belum tersedia'}</div>
           </div>
         </div>
@@ -530,45 +524,46 @@ export default function App() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [connectionAttempt, setConnectionAttempt] = useState(0)
   const [accountNotice, setAccountNotice] = useState('')
+  const sessionVersion = useRef(0)
 
   useEffect(() => {
     let active = true
     if (!IS_API_ENABLED) return undefined
     setApiStatus('checking')
 
-    // Token baru hasil auto-refresh di apiClient disimpan ke session.
-    setAccessTokenListener((accessToken) => {
-      if (active) setSession((current) => ({ ...current, accessToken }))
-    })
-
-    const restoreSession = async () => {
-      try {
-        const accessToken = await refreshAccessToken()
-        const user = await getCurrentUser(accessToken)
-        if (active) setSession({ accessToken, user })
-      } catch {
-        // Tidak ada sesi tersimpan; pengguna tetap sebagai tamu.
-      }
-    }
-
     const initialize = async () => {
       const online = await checkApiConnection()
       if (!active) return
       setApiStatus(online ? 'online' : 'offline')
-      if (online) restoreSession()
     }
 
     initialize()
-<<<<<<< HEAD
     return () => { active = false }
   }, [connectionAttempt])
-=======
+
+  useEffect(() => {
+    if (!IS_API_ENABLED) return undefined
+    let active = true
+    const version = sessionVersion.current
+    setAccessTokenListener((accessToken) => {
+      if (active) setSession((current) => current.user ? { ...current, accessToken } : current)
+    })
+    const restoreSession = async () => {
+      try {
+        const accessToken = await refreshAccessToken()
+        if (!active || version !== sessionVersion.current) return
+        const user = await getCurrentUser(accessToken)
+        if (active && version === sessionVersion.current) setSession({ accessToken, user })
+      } catch {
+        // Cookie absent or expired: leave the user signed out.
+      }
+    }
+    restoreSession()
     return () => {
       active = false
       setAccessTokenListener(null)
     }
   }, [])
->>>>>>> 4ae5a15ac0841ee2cacd6e1b4b1c101db34e3819
 
   const openAuth = useCallback((view = 'login') => {
     setHistoryOpen(false)
@@ -580,17 +575,20 @@ export default function App() {
   const closeHistory = useCallback(() => setHistoryOpen(false), [])
 
   const authenticated = useCallback(({ accessToken, user }) => {
+    sessionVersion.current += 1
+    invalidateAccessToken()
     setAccountNotice('')
     setSession({ accessToken, user })
     setApiStatus('online')
   }, [])
 
   const clearSession = useCallback(() => {
+    sessionVersion.current += 1
+    invalidateAccessToken()
     setHistoryOpen(false)
     setSession({ accessToken: '', user: null })
   }, [])
 
-<<<<<<< HEAD
   const logout = useCallback(async () => {
     clearSession()
     try {
@@ -598,12 +596,6 @@ export default function App() {
     } catch {
       setAccountNotice('Anda sudah keluar dari halaman ini, tetapi sesi di server belum dapat diakhiri. Coba keluar lagi setelah koneksi pulih.')
     }
-=======
-  const logout = useCallback(() => {
-    clearSession()
-    // Hapus cookie refresh_token agar sesi tidak dipulihkan saat halaman dimuat ulang.
-    if (IS_API_ENABLED) logoutUser().catch(() => {})
->>>>>>> 4ae5a15ac0841ee2cacd6e1b4b1c101db34e3819
   }, [clearSession])
 
   const expireSession = useCallback(() => {

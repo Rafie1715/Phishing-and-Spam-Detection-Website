@@ -67,14 +67,15 @@ Alur yang digunakan:
 2. Verifikasi email melalui `POST /auth/verify-otp`.
 3. Login melalui `POST /auth/login`.
 4. Pemulihan akun memakai `POST /auth/forgot-password` dan `POST /auth/reset-password`.
-5. Access token dikirim sebagai header Bearer untuk setiap analisis dan hanya disimpan di memori halaman. Memuat ulang halaman akan mengakhiri sesi.
+5. Access token dikirim sebagai header Bearer dan disimpan di memori halaman. Saat halaman dimuat ulang, frontend mencoba memulihkan sesi memakai cookie refresh token; gunakan tombol Keluar untuk mengakhiri sesi.
 6. Keluar akun membersihkan access token di frontend dan memanggil `POST /auth/logout` untuk meminta backend menghapus cookie sesi. Kegagalan logout server ditampilkan dengan opsi mencoba lagi.
 
-Semua request menggunakan `credentials: include`. Endpoint `/auth/refresh` tersedia pada backend, tetapi belum digunakan untuk pemulihan sesi otomatis; pengguna perlu masuk kembali ketika access token kedaluwarsa. Cookie lintas situs bergantung pada pengaturan backend dan kebijakan browser.
+Semua request menggunakan `credentials: include`. Frontend memakai `/auth/refresh` untuk memulihkan sesi dan mengulang permintaan terautentikasi yang menerima 401 sebanyak satu kali. Permintaan refresh bersamaan digabungkan. Jika refresh gagal, pengguna perlu masuk kembali. Cookie lintas situs bergantung pada pengaturan backend dan kebijakan browser.
 
 Kontrak deteksi:
 
-- URL/pesan: `POST /detection/text` dengan JSON `{ "text": "..." }`.
+- URL: `POST /detection/url` dengan JSON `{ "url": "https://..." }`, mengikuti penambahan endpoint pada kode integrasi terbaru.
+- Pesan: `POST /detection/text` dengan JSON `{ "text": "..." }`.
 - Screenshot: `POST /detection/image` dengan file pada multipart field `file`.
 - Riwayat: `GET /detection/history?page=1&size=8`.
 - Hapus riwayat: `DELETE /detection/history/{id}`.

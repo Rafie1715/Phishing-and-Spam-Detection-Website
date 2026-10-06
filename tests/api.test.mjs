@@ -1,11 +1,15 @@
 import { test, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
-import { API_BASE_URL, apiRequest, checkApiConnection } from '../src/services/apiClient.js'
+import { API_BASE_URL, apiRequest, checkApiConnection, refreshAccessToken, setAccessTokenListener, invalidateAccessToken } from '../src/services/apiClient.js'
 import { detectThreat, MAX_IMAGE_BYTES } from '../src/services/detectionService.js'
 import { loginUser, registerUser, verifyOtp, resendOtp, forgotPassword, resetPassword, getCurrentUser, logoutUser } from '../src/services/authService.js'
 import { getDetectionHistory, deleteDetection } from '../src/services/historyService.js'
 
-afterEach(() => mock.restoreAll())
+afterEach(() => {
+  mock.restoreAll()
+  setAccessTokenListener(null)
+  invalidateAccessToken()
+})
 const result = { id: 42, verdict: 'scam', confidence_score: 0.97, category: 'penipuan', extracted_text: null }
 function respond(data = result, status = 200) {
   return mock.method(globalThis, 'fetch', async () => new Response(status === 204 ? null : JSON.stringify(data), { status }))
@@ -19,8 +23,8 @@ test('JSON analysis sends Bearer, credentials and preserves original HTTP scheme
   const fetchMock = respond()
   const output = await detectThreat({ mode: 'url', value: ' http://example.com/path ', accessToken: 'test-token' })
   const [url, options] = fetchMock.mock.calls[0].arguments
-  assert.equal(url, `${API_BASE_URL}/detection/text`)
-  assert.deepEqual(JSON.parse(options.body), { text: 'http://example.com/path' })
+  assert.equal(url, `${API_BASE_URL}/detection/url`)
+  assert.deepEqual(JSON.parse(options.body), { url: 'http://example.com/path' })
   assert.equal(options.headers.get('Authorization'), 'Bearer test-token')
   assert.equal(options.headers.get('Content-Type'), 'application/json')
   assert.equal(options.credentials, 'include')
@@ -34,7 +38,8 @@ test('URL without scheme gets HTTPS; message is sent as text', async () => {
   const fetchMock = respond()
   await detectThreat({ mode: 'url', value: 'example.com', accessToken: 'test-token' })
   await detectThreat({ mode: 'message', value: 'Pesan untuk diperiksa', accessToken: 'test-token' })
-  assert.equal(JSON.parse(fetchMock.mock.calls[0].arguments[1].body).text, 'https://example.com')
+  assert.equal(JSON.parse(fetchMock.mock.calls[0].arguments[1].body).url, 'https://example.com')
+  assert.equal(fetchMock.mock.calls[1].arguments[0], `${API_BASE_URL}/detection/text`)
   assert.equal(JSON.parse(fetchMock.mock.calls[1].arguments[1].body).text, 'Pesan untuk diperiksa')
 })
 
@@ -134,5 +139,75 @@ test('health requires real ok payload and does not use docs as fallback', async 
   mock.restoreAll()
   const fetchMock = respond({ status: 'unhealthy' })
   assert.equal(await checkApiConnection(), false)
+  assert.equal(fetchMock.mock.callCount(), 1)
+})
+
+test('401 refreshes the token once and retries the original request', async () => {
+  const tokens = []
+  setAccessTokenListener(token => tokens.push(token))
+  const fetchMock = mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url.endsWith('/auth/refresh')) return Response.json({ access_token: 'renewed-token' })
+    if (options.headers.get('Authorization') === 'Bearer renewed-token') return Response.json(result)
+    return Response.json({ detail: 'Token expired' }, { status: 401 })
+  })
+  assert.deepEqual(await apiRequest('/detection/text', { method: 'POST', body: '{"text":"test"}', accessToken: 'old-token' }), result)
+  assert.equal(fetchMock.mock.callCount(), 3)
+  assert.deepEqual(tokens, ['renewed-token'])
+  const retry = fetchMock.mock.calls[2].arguments[1]
+  assert.equal(retry.body, '{"text":"test"}')
+  assert.equal(retry.method, 'POST')
+  assert.equal(retry.skipRefresh, undefined)
+})
+
+test('refresh is shared between simultaneous requests', async () => {
+  const fetchMock = respond({ access_token: 'renewed-token' })
+  const first = refreshAccessToken()
+  const second = refreshAccessToken()
+  assert.equal(first, second)
+  assert.deepEqual(await Promise.all([first, second]), ['renewed-token', 'renewed-token'])
+  assert.equal(fetchMock.mock.callCount(), 1)
+})
+
+test('failed refresh preserves 401 without entering a retry loop', async () => {
+  const fetchMock = respond({ detail: 'Token expired' }, 401)
+  await assert.rejects(apiRequest('/auth/me', { accessToken: 'expired' }), { status: 401 })
+  assert.equal(fetchMock.mock.callCount(), 2)
+})
+
+test('a second 401 after successful refresh is not retried', async () => {
+  const fetchMock = mock.method(globalThis, 'fetch', async url => url.endsWith('/auth/refresh')
+    ? Response.json({ access_token: 'renewed-token' })
+    : Response.json({ detail: 'Not authenticated' }, { status: 401 }))
+  await assert.rejects(apiRequest('/auth/me', { accessToken: 'expired' }), { status: 401 })
+  assert.equal(fetchMock.mock.callCount(), 3)
+})
+
+test('invalid token response never updates the session', async () => {
+  const tokens = []
+  setAccessTokenListener(token => tokens.push(token))
+  respond({ access_token: '' })
+  await assert.rejects(refreshAccessToken(), { code: 'INVALID_RESPONSE' })
+  assert.deepEqual(tokens, [])
+})
+
+test('a refresh completing after logout cannot restore the session', async () => {
+  const tokens = []
+  setAccessTokenListener(token => tokens.push(token))
+  let completeRefresh
+  mock.method(globalThis, 'fetch', () => new Promise(resolve => { completeRefresh = resolve }))
+  const pending = refreshAccessToken()
+  invalidateAccessToken()
+  completeRefresh(Response.json({ access_token: 'obsolete-token' }))
+  await assert.rejects(pending, { status: 401 })
+  assert.deepEqual(tokens, [])
+})
+
+test('a late 401 from a signed-out session must not start refresh', async () => {
+  let completeRequest
+  const fetchMock = mock.method(globalThis, 'fetch', () => new Promise(resolve => { completeRequest = resolve }))
+  const pending = apiRequest('/auth/me', { accessToken: 'obsolete-token' })
+  invalidateAccessToken()
+  completeRequest(Response.json({ detail: 'Not authenticated' }, { status: 401 }))
+  await assert.rejects(pending, { status: 401 })
   assert.equal(fetchMock.mock.callCount(), 1)
 })

@@ -23,27 +23,14 @@ function getErrorMessage(data, status) {
   return `Permintaan gagal (${status}).`
 }
 
-<<<<<<< HEAD
-export async function apiRequest(path, { accessToken, headers: customHeaders, timeoutMs = REQUEST_TIMEOUT_MS, ...options } = {}) {
-=======
-async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
-  const controller = new AbortController()
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    return await fetch(url, { ...options, signal: controller.signal })
-  } catch (error) {
-    if (error?.name === 'AbortError') {
-      throw new Error('Permintaan terlalu lama. Periksa koneksi Anda lalu coba lagi.')
-    }
-    throw error
-  } finally {
-    window.clearTimeout(timer)
-  }
-}
-
 let refreshPromise = null
 let accessTokenListener = null
+let sessionVersion = 0
+
+export function invalidateAccessToken() {
+  sessionVersion += 1
+  refreshPromise = null
+}
 
 export function setAccessTokenListener(listener) {
   accessTokenListener = listener
@@ -53,21 +40,33 @@ export function setAccessTokenListener(listener) {
 // Permintaan yang bersamaan memakai satu proses refresh yang sama.
 export function refreshAccessToken() {
   if (!refreshPromise) {
-    refreshPromise = apiRequest('/auth/refresh', { method: 'POST', skipRefresh: true })
+    const version = sessionVersion
+    const pendingRefresh = apiRequest('/auth/refresh', { method: 'POST', skipRefresh: true })
       .then((token) => {
+        if (version !== sessionVersion) {
+          const error = new Error('Sesi sudah berubah. Silakan masuk kembali.')
+          error.status = 401
+          throw error
+        }
+        if (typeof token?.access_token !== 'string' || !token.access_token.trim()) {
+          const error = new Error('Respons token tidak valid. Silakan masuk kembali.')
+          error.code = 'INVALID_RESPONSE'
+          throw error
+        }
         accessTokenListener?.(token.access_token)
         return token.access_token
       })
       .finally(() => {
-        refreshPromise = null
+        if (refreshPromise === pendingRefresh) refreshPromise = null
       })
+    refreshPromise = pendingRefresh
   }
   return refreshPromise
 }
 
-export async function apiRequest(path, { accessToken, headers: customHeaders, timeoutMs, skipRefresh = false, ...options } = {}) {
->>>>>>> 4ae5a15ac0841ee2cacd6e1b4b1c101db34e3819
+export async function apiRequest(path, { accessToken, headers: customHeaders, timeoutMs = REQUEST_TIMEOUT_MS, skipRefresh = false, ...options } = {}) {
   if (!IS_API_ENABLED) throw new Error('API backend sedang dinonaktifkan.')
+  const requestVersion = sessionVersion
 
   const headers = new Headers(customHeaders)
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
@@ -87,6 +86,15 @@ export async function apiRequest(path, { accessToken, headers: customHeaders, ti
     const body = response.status === 204 ? '' : await response.text()
     let data = null
     try { data = body ? JSON.parse(body) : null } catch { /* Handled below. */ }
+    // Retry once only, and keep the response-body timeout on each request.
+    if (response.status === 401 && accessToken && !skipRefresh && requestVersion === sessionVersion) {
+      clearTimeout(timer)
+      let newAccessToken
+      try { newAccessToken = await refreshAccessToken() } catch { /* Report original 401 below. */ }
+      if (newAccessToken) {
+        return apiRequest(path, { ...options, headers: customHeaders, timeoutMs, accessToken: newAccessToken, skipRefresh: true })
+      }
+    }
     if (!response.ok) {
       const error = new Error(getErrorMessage(data, response.status))
       error.status = response.status
@@ -105,31 +113,6 @@ export async function apiRequest(path, { accessToken, headers: customHeaders, ti
   } finally {
     clearTimeout(timer)
   }
-<<<<<<< HEAD
-=======
-
-  // Access token kedaluwarsa: refresh sekali, lalu ulangi permintaan dengan token baru.
-  if (response.status === 401 && accessToken && !skipRefresh) {
-    let newAccessToken
-    try {
-      newAccessToken = await refreshAccessToken()
-    } catch {
-      newAccessToken = null
-    }
-    if (newAccessToken) {
-      return apiRequest(path, { ...options, headers: customHeaders, timeoutMs, accessToken: newAccessToken, skipRefresh: true })
-    }
-  }
-
-  const data = response.status === 204 ? null : await response.json().catch(() => null)
-  if (!response.ok) {
-    const error = new Error(getErrorMessage(data, response.status))
-    error.status = response.status
-    throw error
-  }
-
-  return data
->>>>>>> 4ae5a15ac0841ee2cacd6e1b4b1c101db34e3819
 }
 
 export async function checkApiConnection() {
