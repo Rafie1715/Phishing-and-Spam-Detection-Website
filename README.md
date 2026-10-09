@@ -103,6 +103,29 @@ Untuk kembali ke simulasi lokal tanpa backend, set `VITE_API_ENABLED=false` lalu
 
 ## Deployment frontend dan CORS
 
+### Netlify
+
+Frontend produksi: https://sentry-phishing-rafie1715.netlify.app
+
+Dashboard: https://app.netlify.com/projects/sentry-phishing-rafie1715
+
+Deployment saat ini diunggah manual melalui CLI, belum terhubung ke auto-deploy GitHub. Untuk memperbarui situs dari folder proyek yang sudah ditautkan, jalankan `netlify.cmd deploy --prod`.
+
+**Tindak lanjut backend:** pemeriksaan preflight pada 6 Oktober 2026 mengembalikan `400 Disallowed CORS origin` untuk origin `https://sentry-phishing-rafie1715.netlify.app`. Pengembang backend perlu menambahkan origin tersebut (tanpa slash di akhir) ke daftar CORS, mengizinkan credentials, serta me-redeploy backend. Login dan analisis belum dapat digunakan dari domain produksi sampai konfigurasi tersebut diperbarui.
+
+Konfigurasi `netlify.toml` menyediakan build command, folder publikasi `dist`, environment API, dan fallback React. Hanya isi `dist` yang dipublikasikan, bukan `.env.local` atau seluruh repository. Konfigurasi `vercel.json` tidak dipakai oleh Netlify.
+
+Untuk deployment melalui terminal Windows:
+
+```powershell
+netlify.cmd login
+netlify.cmd deploy --prod
+```
+
+Saat belum terhubung ke project, pilih project Netlify yang benar atau buat project baru di akun/team Anda. Setelah URL Netlify tersedia, tambahkan origin tersebut ke CORS backend dan uji `/health` serta alur autentikasi dari browser. Deployment frontend tidak otomatis mengubah CORS di Vercel. Jangan mengirim token login ke chat atau menyimpannya di repository.
+
+### Pengaturan hosting dan backend
+
 1. Pada hosting frontend, set `VITE_API_BASE_URL=https://scam-project-backend.vercel.app`, `VITE_API_ENABLED=true`, dan `VITE_API_TIMEOUT_MS=60000`.
 2. Gunakan build command `npm run build` dan output directory `dist`. Environment Vite dibaca saat build, jadi lakukan rebuild/redeploy setiap kali nilainya berubah.
 3. Minta pengembang backend menambahkan **origin frontend yang sebenarnya** (misalnya `https://nama-frontend.netlify.app`) ke daftar CORS, termasuk domain custom jika digunakan. Izinkan credentials serta header `Content-Type` dan `Authorization`; jangan gunakan wildcard `*` untuk credentialed requests.

@@ -75,7 +75,8 @@ export async function apiRequest(path, { accessToken, headers: customHeaders, ti
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const baseUrl = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && API_BASE_URL === 'https://scam-project-backend.vercel.app' ? '/api-proxy' : API_BASE_URL
+    const response = await fetch(`${baseUrl}${path}`, {
       ...options,
       headers,
       credentials: 'include',

@@ -4,7 +4,36 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  // Origin ini sudah diizinkan oleh CORS backend yang di-deploy.
-  server: { host: 'localhost', port: 5173, strictPort: true },
-  preview: { host: 'localhost', port: 5173, strictPort: true },
+  server: {
+    host: 'localhost',
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      '/api-proxy': {
+        target: 'https://scam-project-backend.vercel.app',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api-proxy/, ''),
+        headers: {
+          Origin: 'https://sentry-phishing-rafie1715.netlify.app',
+        },
+      },
+    },
+  },
+  preview: {
+    host: 'localhost',
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      '/api-proxy': {
+        target: 'https://scam-project-backend.vercel.app',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api-proxy/, ''),
+        headers: {
+          Origin: 'https://sentry-phishing-rafie1715.netlify.app',
+        },
+      },
+    },
+  },
 })
