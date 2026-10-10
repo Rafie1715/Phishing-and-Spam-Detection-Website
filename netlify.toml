@@ -8,6 +8,13 @@
   VITE_API_ENABLED = "true"
   VITE_API_TIMEOUT_MS = "60000"
 
+# Proxy requests to the Vercel backend to eliminate browser CORS errors on Netlify
+[[redirects]]
+  from = "/api-proxy/*"
+  to = "https://scam-project-backend.vercel.app/:splat"
+  status = 200
+  force = true
+
 # Keep React entry points accessible on direct navigation and refresh.
 [[redirects]]
   from = "/*"
