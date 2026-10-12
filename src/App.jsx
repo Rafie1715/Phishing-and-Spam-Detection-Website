@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createDemoResult, detectThreat, MAX_IMAGE_BYTES, MAX_IMAGE_SIZE_MB } from './services/detectionService.js'
 import { forgotPassword, getCurrentUser, loginUser, logoutUser, registerUser, resendOtp, resetPassword, verifyOtp } from './services/authService.js'
-import { IS_API_ENABLED, checkApiConnection, refreshAccessToken, setAccessTokenListener, invalidateAccessToken } from './services/apiClient.js'
+import { IS_API_ENABLED, checkApiConnection, refreshAccessToken, setAccessTokenListener, invalidateAccessToken, GUEST_LIMIT_REACHED, GUEST_LIMIT_MESSAGE } from './services/apiClient.js'
 import HistoryDrawer from './components/HistoryDrawer.jsx'
 import { useActiveSection } from './hooks/useActiveSection.js'
 import { Hero, MethodSection, Insights, HelpCenter, Footer } from './components/EditorialSections.jsx'
@@ -478,7 +478,7 @@ function ResultPanel({ result, onReset, loading, onCopy }) {
 const SCAN_MODES = [
   { id: 'url', label: 'Tautan', Icon: LinkIcon },
   { id: 'message', label: 'Pesan', Icon: MailIcon },
-  { id: 'image', label: 'Screenshot', Icon: ImageIcon },
+  { id: 'image', label: 'Screenshot', Icon: ImageIcon, badge: 'Segera' },
 ]
 
 function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetryConnection }) {
@@ -493,6 +493,9 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(() => (demoMode === 'threat' ? createDemoResult(SAMPLE.url) : demoMode === 'image-result' ? createDemoResult('', 'image') : null))
+  const [guestLimitReached, setGuestLimitReached] = useState(false)
+  const guestLimitRef = useRef(null)
+  const requiresGuestLogin = guestLimitReached && !session.accessToken
   const [toast, setToast] = useState('')
   const toastTimer = useRef(null)
   const urlRef = useRef(null)
@@ -504,6 +507,12 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
     if (previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl)
   }, [previewUrl])
   useEffect(() => () => clearTimeout(toastTimer.current), [])
+  useEffect(() => {
+    if (session.accessToken) setGuestLimitReached(false)
+  }, [session.accessToken])
+  useEffect(() => {
+    if (requiresGuestLogin) guestLimitRef.current?.focus()
+  }, [requiresGuestLogin])
   useEffect(() => {
     if (!result || window.innerWidth > 800) return undefined
     const frame = requestAnimationFrame(() => document.getElementById('result-card')?.scrollIntoView({
@@ -607,12 +616,12 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
         return
       }
     }
-    if (sampleActive) {
-      setResult(createDemoResult(value, mode))
+    if (sampleActive || mode === 'image') {
+      setResult(createDemoResult(mode === 'image' ? 'Screenshot bukti transfer tiruan' : value, mode))
       return
     }
-    if (IS_API_ENABLED && !session.accessToken) {
-      onAuthRequired()
+    if (IS_API_ENABLED && requiresGuestLogin) {
+      onAuthRequired('login')
       return
     }
     inFlight.current = true
@@ -621,7 +630,11 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
     try {
       setResult(await detectThreat({ mode, value, file: imageFile, accessToken: session.accessToken }))
     } catch (requestError) {
-      if (requestError?.status === 401 || requestError?.status === 403) onSessionExpired()
+      if (requestError?.code === GUEST_LIMIT_REACHED && !session.accessToken) {
+        setGuestLimitReached(true)
+        return
+      }
+      if (session.accessToken && (requestError?.status === 401 || requestError?.status === 403)) onSessionExpired()
       setError(requestError instanceof Error ? requestError.message : 'Pemeriksaan gagal. Coba kembali.')
     } finally {
       inFlight.current = false
@@ -646,9 +659,9 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
   }
 
   const helper = {
-    url: 'Tempel alamatnya tanpa membuka situs tersebut.',
+    url: 'Tempel alamat website tanpa perlu membukanya.',
     message: 'Sertakan isi pesan selengkap mungkin agar konteksnya terbaca.',
-    image: 'Pastikan teks pada screenshot terlihat jelas.',
+    image: 'Fitur pemindaian screenshot AI sedang disiapkan untuk pembaruan berikutnya.',
   }[mode]
 
   return (
@@ -667,7 +680,7 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
       <div className="scanner-workspace">
         <div className="input-panel">
           <div className="scan-tabs" role="tablist" aria-label="Jenis pemeriksaan">
-            {SCAN_MODES.map(({ id, label, Icon }, i) => (
+            {SCAN_MODES.map(({ id, label, Icon, badge }, i) => (
               <button
                 id={'tab-' + id}
                 key={id}
@@ -682,6 +695,11 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
               >
                 <Icon className="size-[17px]" />
                 <span>{label}</span>
+                {badge && (
+                  <span className="rounded-md border border-violet-500/30 bg-violet-950/40 px-1.5 py-0.5 font-sans text-[10px] font-bold text-violet-300">
+                    {badge}
+                  </span>
+                )}
                 <span className="tab-number" aria-hidden="true">0{i + 1}</span>
               </button>
             ))}
@@ -691,9 +709,17 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
             <fieldset disabled={loading}>
               <div className="input-heading">
                 <label htmlFor={mode + '-input'}>
-                  {mode === 'url' ? 'Alamat website' : mode === 'message' ? 'Isi pesan' : 'Screenshot'}
+                  {mode === 'url' ? 'Alamat website' : mode === 'message' ? 'Isi pesan' : 'Screenshot (Segera Hadir)'}
                 </label>
-                {mode !== 'message' && <span className="beta-label">Beta</span>}
+                {mode === 'image' ? (
+                  <span className="rounded-md border border-violet-500/30 bg-violet-950/40 px-2 py-0.5 font-sans text-[10px] font-bold text-violet-300">
+                    Fitur Mendatang
+                  </span>
+                ) : (
+                  <span className="rounded-md border border-emerald-500/30 bg-emerald-950/40 px-2 py-0.5 font-sans text-[10px] font-bold text-emerald-400">
+                    Aktif
+                  </span>
+                )}
               </div>
               <p id="input-help" className="input-help">{helper}</p>
 
@@ -739,46 +765,61 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
               )}
 
               {mode === 'image' && (
-                <div
-                  className="image-field"
-                  data-dragging={dragActive}
-                  onDragOver={(e) => { e.preventDefault(); if (!loading) setDragActive(true) }}
-                  onDragLeave={() => setDragActive(false)}
-                  onDrop={(e) => { e.preventDefault(); setDragActive(false); handleImage(e.dataTransfer.files[0]) }}
-                >
-                  <input
-                    ref={fileRef}
-                    id="image-input"
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    onChange={(e) => handleImage(e.target.files?.[0])}
-                    className="sr-only"
-                  />
-                  {previewUrl ? (
-                    <div className="image-preview">
-                      <img
-                        src={previewUrl}
-                        alt="Screenshot yang akan diperiksa"
-                        onError={() => {
-                          setError('Gambar tidak dapat dibaca. Pilih file gambar lain.')
-                          setImageFile(null)
-                          setPreviewUrl('')
-                          setSampleActive(false)
-                        }}
-                      />
-                      <div>
-                        <span className="text-cyan-300">{sampleActive ? 'Contoh screenshot · simulasi' : imageFile?.name}</span>
-                        <button type="button" onClick={clearImage}>Hapus</button>
-                      </div>
+                <>
+                  <div className="mb-4 rounded-xl border border-violet-500/30 bg-violet-950/25 p-4 text-xs leading-relaxed text-slate-300">
+                    <div className="flex items-center gap-2 font-bold text-violet-300 mb-1">
+                      <span>✨</span>
+                      <span>Fitur Masa Depan: Pemindai Gambar AI (OCR)</span>
                     </div>
-                  ) : (
-                    <button type="button" className="upload-button" onClick={() => fileRef.current?.click()}>
-                      <ImageIcon className="size-8" />
-                      <strong>Pilih atau tarik gambar ke sini</strong>
-                      <span>PNG, JPG, WebP · Maksimal {MAX_IMAGE_SIZE_MB} MB</span>
-                    </button>
-                  )}
-                </div>
+                    <p>
+                      Layanan pemeriksaan yang saat ini aktif berfungsi adalah <strong>Tautan (URL)</strong> dan <strong>Pesan Teks</strong>. Fitur analisis visual untuk membaca screenshot bukti transfer & formulir tiruan sedang dalam tahap riset dan pengembangan backend.
+                    </p>
+                    <p className="mt-2 text-violet-300 font-medium">
+                      Anda tetap dapat mencoba simulasi di bawah untuk melihat contoh tampilan hasil pemeriksaannya saat fitur ini dirilis nanti.
+                    </p>
+                  </div>
+
+                  <div
+                    className="image-field"
+                    data-dragging={dragActive}
+                    onDragOver={(e) => { e.preventDefault(); if (!loading) setDragActive(true) }}
+                    onDragLeave={() => setDragActive(false)}
+                    onDrop={(e) => { e.preventDefault(); setDragActive(false); handleImage(e.dataTransfer.files[0]) }}
+                  >
+                    <input
+                      ref={fileRef}
+                      id="image-input"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => handleImage(e.target.files?.[0])}
+                      className="sr-only"
+                    />
+                    {previewUrl ? (
+                      <div className="image-preview">
+                        <img
+                          src={previewUrl}
+                          alt="Screenshot yang akan diperiksa"
+                          onError={() => {
+                            setError('Gambar tidak dapat dibaca. Pilih file gambar lain.')
+                            setImageFile(null)
+                            setPreviewUrl('')
+                            setSampleActive(false)
+                          }}
+                        />
+                        <div>
+                          <span className="text-cyan-300">{sampleActive ? 'Contoh screenshot · simulasi' : imageFile?.name}</span>
+                          <button type="button" onClick={clearImage}>Hapus</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" className="upload-button" onClick={() => fileRef.current?.click()}>
+                        <ImageIcon className="size-8 text-violet-400" />
+                        <strong>Pilih atau tarik contoh gambar ke sini</strong>
+                        <span>PNG, JPG, WebP · Maksimal {MAX_IMAGE_SIZE_MB} MB</span>
+                      </button>
+                    )}
+                  </div>
+                </>
               )}
 
               <div className="input-meta">
@@ -792,10 +833,10 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
 
               <p id="input-limit" className="input-limitation">
                 {mode === 'url'
-                  ? 'Beta: pemeriksaan pola teks pada URL. Reputasi domain belum diperiksa.'
+                  ? 'Pemeriksaan pola tautan web untuk mendeteksi penipuan dan domain mencurigakan.'
                   : mode === 'image'
-                  ? 'Beta: pembacaan gambar masih dalam pengembangan.'
-                  : 'Pesan diperiksa berdasarkan pola bahasa dan konteksnya.'}
+                  ? 'Pratinjau konsep fitur screenshot AI. Gunakan tab Tautan atau Pesan untuk analisis aktif saat ini.'
+                  : 'Pesan diperiksa berdasarkan pola bahasa, manipulasi psikologis, dan konteksnya.'}
               </p>
 
               {sampleActive && (
@@ -810,18 +851,34 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
                 </p>
               )}
 
+              {requiresGuestLogin && (
+                <div ref={guestLimitRef} tabIndex={-1} role="alert" aria-labelledby="guest-limit-title" className="guest-limit-notice my-4 rounded-xl border border-amber-400/40 bg-amber-950/30 p-4 text-sm text-amber-100 outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
+                  <h3 id="guest-limit-title" className="font-semibold">Batas percobaan gratis tercapai</h3>
+                  <p className="mt-2 text-xs leading-relaxed">{GUEST_LIMIT_MESSAGE}</p>
+                  <p className="mt-2 text-xs text-slate-300">Input Anda tetap tersimpan di halaman ini. Setelah masuk, tekan Periksa untuk melanjutkan.</p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button type="button" onClick={() => onAuthRequired('login')} className="rounded-lg bg-cyan-300 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-200">Masuk</button>
+                    <button type="button" onClick={() => onAuthRequired('register')} className="rounded-lg border border-white/30 px-4 py-2 text-xs font-bold text-white hover:bg-white/10">Daftar akun</button>
+                  </div>
+                </div>
+              )}
+
               <button type="submit" className="primary-button group scan-submit">
                 {loading ? (
                   <>
-                    <span className="spin size-4 rounded-full border-2 border-white/30 border-t-white" />
+                    <span className="spin size-4 rounded-full border-2 border-slate-900/25 border-t-slate-950" />
                     <span>Memeriksa…</span>
                   </>
                 ) : (
                   <>
                     <span>
-                      {sampleActive || !IS_API_ENABLED
+                      {mode === 'image'
+                        ? 'Coba simulasi screenshot'
+                        : sampleActive || !IS_API_ENABLED
                         ? 'Jalankan simulasi'
-                        : 'Periksa ' + (mode === 'url' ? 'tautan' : mode === 'message' ? 'pesan' : 'screenshot')}
+                        : requiresGuestLogin
+                        ? 'Masuk untuk melanjutkan'
+                        : 'Periksa ' + (mode === 'url' ? 'tautan' : 'pesan')}
                     </span>
                     <span aria-hidden="true">↗</span>
                   </>
@@ -829,13 +886,13 @@ function Scanner({ session, apiStatus, onAuthRequired, onSessionExpired, onRetry
               </button>
 
               <p className="scan-account-note">
-                {sampleActive || !IS_API_ENABLED ? (
+                {mode === 'image' || sampleActive || !IS_API_ENABLED ? (
                   'Simulasi berjalan di perangkat Anda.'
                 ) : session.user ? (
                   'Hasil pemeriksaan tersimpan di riwayat Anda.'
                 ) : (
                   <>
-                    Masuk diperlukan untuk analisis cloud. <button type="button" onClick={useSample}>Coba simulasi tanpa akun.</button>
+                    Coba deteksi tanpa akun hingga batas percobaan tercapai. <button type="button" onClick={() => onAuthRequired('login')}>Masuk untuk melanjutkan dengan akun.</button>
                   </>
                 )}
               </p>
@@ -1009,7 +1066,7 @@ export default function App() {
         <Scanner
           session={session}
           apiStatus={apiStatus}
-          onAuthRequired={() => openAuth('login')}
+          onAuthRequired={openAuth}
           onSessionExpired={expireSession}
           onRetryConnection={() => setConnectionAttempt((attempt) => attempt + 1)}
         />

@@ -55,7 +55,7 @@ export default function RadarVisual() {
         </span>
         <span className="radar-tag radar-tag-image">
           <i />
-          <span>Screenshot</span>
+          <span>Screenshot (Segera)</span>
         </span>
       </div>
 

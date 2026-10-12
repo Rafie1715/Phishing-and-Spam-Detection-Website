@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>Sentry</title>
+  <rect width="64" height="64" rx="12" fill="#080c14" />
+  <g transform="translate(16 14)" stroke="#00d9f5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 2 29 7v10c0 8-6 13-13 17C9 30 3 25 3 17V7Z" stroke-width="2.2" />
+    <path d="m10 17 4 4 8-9" stroke-width="2.4" />
+  </g>
+</svg>

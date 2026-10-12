@@ -5,8 +5,18 @@ export const API_BASE_URL = (configuredBaseUrl || 'https://scam-project-backend.
 export const IS_API_ENABLED = env.VITE_API_ENABLED !== 'false'
 const configuredTimeout = Number(env.VITE_API_TIMEOUT_MS || 60000)
 const REQUEST_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout > 0 ? configuredTimeout : 60000
+export const GUEST_LIMIT_REACHED = 'guest_limit_reached'
+export const GUEST_LIMIT_MESSAGE = 'Batas percobaan tamu tercapai. Silakan masuk atau daftar untuk melanjutkan deteksi phishing dan spam.'
+
+function getErrorCode(data) {
+  const candidates = [data?.detail?.code, data?.detail?.error_code, data?.detail?.error,
+    data?.code, data?.error_code, data?.error?.code, data?.error, data?.detail, data?.message]
+  const codes = candidates.filter((value) => typeof value === 'string').map((value) => value.trim().toLowerCase())
+  return codes.includes(GUEST_LIMIT_REACHED) ? GUEST_LIMIT_REACHED : codes[0]
+}
 
 function getErrorMessage(data, status) {
+  if (getErrorCode(data) === GUEST_LIMIT_REACHED) return GUEST_LIMIT_MESSAGE
   if (status === 413) return 'Gambar terlalu besar untuk layanan. Gunakan gambar maksimal 4 MB.'
   if (status === 429) return 'Terlalu banyak permintaan. Tunggu sebentar sebelum mencoba lagi.'
   if (status >= 500) return 'Layanan sedang mengalami gangguan. Silakan coba lagi beberapa saat.'
@@ -17,6 +27,7 @@ function getErrorMessage(data, status) {
   }
 
   if (typeof detail === 'string') return detail
+  if (typeof detail?.message === 'string') return detail.message
   if (typeof data?.message === 'string') return data.message
   if (status === 401) return 'Sesi Anda sudah berakhir. Silakan masuk kembali.'
   if (status === 403) return 'Anda tidak memiliki akses untuk permintaan ini.'
@@ -91,8 +102,9 @@ export async function apiRequest(path, { accessToken, headers: customHeaders, ti
     const body = response.status === 204 ? '' : await response.text()
     let data = null
     try { data = body ? JSON.parse(body) : null } catch { /* Handled below. */ }
+    const errorCode = getErrorCode(data)
     // Retry once only, and keep the response-body timeout on each request.
-    if (response.status === 401 && accessToken && !skipRefresh && requestVersion === sessionVersion) {
+    if (response.status === 401 && errorCode !== GUEST_LIMIT_REACHED && accessToken && !skipRefresh && requestVersion === sessionVersion) {
       clearTimeout(timer)
       let newAccessToken
       try { newAccessToken = await refreshAccessToken() } catch { /* Report original 401 below. */ }
@@ -103,6 +115,7 @@ export async function apiRequest(path, { accessToken, headers: customHeaders, ti
     if (!response.ok) {
       const error = new Error(getErrorMessage(data, response.status))
       error.status = response.status
+      error.code = errorCode
       throw error
     }
     if (response.status !== 204 && (data === null || typeof data !== 'object')) {

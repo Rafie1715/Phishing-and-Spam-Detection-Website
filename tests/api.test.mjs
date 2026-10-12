@@ -1,6 +1,6 @@
 import { test, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
-import { API_BASE_URL, apiRequest, checkApiConnection, refreshAccessToken, setAccessTokenListener, invalidateAccessToken } from '../src/services/apiClient.js'
+import { API_BASE_URL, apiRequest, checkApiConnection, refreshAccessToken, setAccessTokenListener, invalidateAccessToken, GUEST_LIMIT_REACHED, GUEST_LIMIT_MESSAGE } from '../src/services/apiClient.js'
 import { detectThreat, MAX_IMAGE_BYTES } from '../src/services/detectionService.js'
 import { loginUser, registerUser, verifyOtp, resendOtp, forgotPassword, resetPassword, getCurrentUser, logoutUser } from '../src/services/authService.js'
 import { getDetectionHistory, deleteDetection } from '../src/services/historyService.js'
@@ -53,13 +53,59 @@ test('screenshot uses multipart file field with browser-owned content type', asy
   assert.equal(options.headers.has('Content-Type'), false)
 })
 
-test('missing authentication and invalid screenshots do not send requests', async () => {
+test('invalid screenshots do not send requests', async () => {
   const fetchMock = respond()
-  await assert.rejects(detectThreat({ mode: 'message', value: 'test' }), { status: 401 })
   for (const file of [null, new File(['x'], 'bad.svg', { type: 'image/svg+xml' }), new File([], 'empty.png', { type: 'image/png' }), new File([new Uint8Array(MAX_IMAGE_BYTES + 1)], 'large.png', { type: 'image/png' })]) {
     await assert.rejects(detectThreat({ mode: 'image', file, accessToken: 'test-token' }))
   }
   assert.equal(fetchMock.mock.callCount(), 0)
+})
+
+test('guest URL and message analysis send cookies without Authorization', async () => {
+  const fetchMock = respond()
+  for (const mode of ['url', 'message']) {
+    const output = await detectThreat({ mode, value: 'example.com' })
+    assert.equal(output.source, 'model')
+  }
+  assert.equal(fetchMock.mock.callCount(), 2)
+  assert.ok(fetchMock.mock.calls[0].arguments[0].endsWith('/detection/url'))
+  assert.ok(fetchMock.mock.calls[1].arguments[0].endsWith('/detection/text'))
+  for (const call of fetchMock.mock.calls) {
+    assert.equal(call.arguments[1].headers.has('Authorization'), false)
+    assert.equal(call.arguments[1].credentials, 'include')
+  }
+})
+
+test('guest limit survives FastAPI nested or string errors and top-level codes', async () => {
+  const payloads = [
+    { detail: 'guest_limit_reached' },
+    { detail: { code: 'guest_limit_reached', message: 'Please log in' } },
+    { detail: { error: 'guest_limit_reached' } },
+    { code: 'guest_limit_reached' },
+    { error_code: 'guest_limit_reached' },
+    { error: 'guest_limit_reached' },
+    { error: { code: 'guest_limit_reached' } },
+  ]
+  for (const status of [401, 403, 429]) {
+    for (const payload of payloads) {
+      const fetchMock = respond(payload, status)
+      await assert.rejects(detectThreat({ mode: 'message', value: 'test' }), {
+        status, code: GUEST_LIMIT_REACHED, message: GUEST_LIMIT_MESSAGE,
+      })
+      assert.equal(fetchMock.mock.callCount(), 1, 'Guest limit must never trigger automatic refresh or retry')
+      mock.restoreAll()
+    }
+  }
+})
+
+test('ordinary rate limits are not mistaken for guest quota exhaustion', async () => {
+  respond({ detail: 'Too many requests' }, 429)
+  await assert.rejects(detectThreat({ mode: 'message', value: 'test' }), error => {
+    assert.equal(error.status, 429)
+    assert.notEqual(error.code, GUEST_LIMIT_REACHED)
+    assert.match(error.message, /Terlalu banyak/)
+    return true
+  })
 })
 
 test('invalid model verdict and confidence are rejected rather than shown as safe', async () => {

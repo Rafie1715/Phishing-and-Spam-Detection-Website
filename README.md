@@ -23,6 +23,9 @@ npm run build
 
 ## Fitur
 
+- Deteksi tautan dan pesan dapat dicoba sebagai tamu tanpa login. Batas percobaan ditentukan backend; frontend tidak menetapkan jumlah kuota sendiri.
+- Respons error `guest_limit_reached` menampilkan pemberitahuan dengan tombol Masuk dan Daftar. Input tetap berada di halaman; setelah login, pengguna dapat menekan Periksa lagi. Error 429 umum tetap ditampilkan sebagai pembatasan laju, bukan batas tamu.
+
 - Komponen React dengan state UI terkelola
 - Styling responsif menggunakan Tailwind CSS v4
 - Pemindai URL dan isi pesan melalui model backend; aturan heuristik lokal hanya untuk simulasi
@@ -39,6 +42,8 @@ npm run build
 - Login, registrasi, verifikasi, pemulihan kata sandi, dan panel riwayat pemeriksaan
 
 ## Pemeriksaan UI lokal
+
+Untuk menguji alur guest secara terisolasi, gunakan `node scripts/review-guest.mjs` dengan Vite pada `http://localhost:5173` dan Edge pengujian pada debugging port `9225`. Script mengganti seluruh respons API sebelum halaman dimuat: tidak memakai kuota backend, membuat akun, atau mengirim email. Pengujian mencakup analisis tamu, 429 biasa, alert batas guest, pilihan daftar, input yang tetap tersimpan, dan analisis setelah login tiruan. Bukti pengujian tersedia pada `artifacts/guest-review.json` dan `artifacts/guest-limit.png`.
 
 Desain dan alur lokal diperiksa pada lebar 320, 390, 768, dan 1440 piksel. Screenshot serta laporan tersedia di `artifacts/`.
 
@@ -97,7 +102,7 @@ Contoh respons backend:
 
 Untuk kembali ke simulasi lokal tanpa backend, set `VITE_API_ENABLED=false` lalu restart Vite.
 
-> Screenshot dikirim ke endpoint gambar, tetapi kualitas OCR dan hasil model perlu diverifikasi bersama pengembang backend menggunakan akun uji. Frontend tidak menganggap hasil simulasi sebagai hasil model asli.
+> Tab screenshot saat ini tetap berupa simulasi fitur mendatang, sesuai desain yang ada; perubahan akses tamu hanya mengaktifkan deteksi nyata pada tab tautan dan pesan. Frontend tidak menganggap hasil simulasi sebagai hasil model asli.
 
 > Upload dibatasi 4 MB agar file beserta multipart header tetap di bawah [batas request Vercel Functions 4,5 MB](https://vercel.com/docs/functions/limitations#request-body-size). Screenshot yang lebih besar perlu diperkecil terlebih dahulu.
 

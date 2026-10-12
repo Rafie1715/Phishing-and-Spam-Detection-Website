@@ -89,12 +89,6 @@ export async function detectThreat({ mode, value = '', file = null, accessToken 
     return mode === 'image' ? mockImageAnalysis() : mockTextAnalysis(value, mode)
   }
 
-  if (!accessToken) {
-    const error = new Error('Silakan masuk terlebih dahulu untuk menggunakan analisis model.')
-    error.status = 401
-    throw error
-  }
-
   if (mode === 'image') {
     if (!(file instanceof Blob) || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       throw new Error('Pilih gambar PNG, JPG, atau WebP yang valid.')

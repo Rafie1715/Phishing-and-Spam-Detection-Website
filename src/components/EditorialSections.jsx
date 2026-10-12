@@ -14,7 +14,7 @@ export function Hero() {
         </h1>
 
         <p className="hero-description">
-          Pesan meyakinkan belum tentu aman. Periksa tautan, pesan WhatsApp/SMS, dan screenshot yang mencurigakan sebelum mengambil langkah berikutnya.
+          Pesan meyakinkan belum tentu aman. Periksa tautan web mencurigakan dan pesan WhatsApp/SMS berpotensi penipuan sebelum mengambil tindakan.
         </p>
 
         <div className="hero-actions">
@@ -56,7 +56,7 @@ export function MethodSection() {
         {[
           [
             'Bawa yang mencurigakan.',
-            'Tempel tautan alamat web, salin isi pesan dari WhatsApp atau SMS, atau unggah screenshot bukti transfer yang terasa janggal.',
+            'Tempel tautan alamat web atau salin isi pesan dari WhatsApp atau SMS yang terasa janggal (fitur deteksi screenshot visual sedang dipersiapkan).',
             '01',
           ],
           [
@@ -174,9 +174,9 @@ export function Insights() {
 
 const faqs = [
   ['Apakah hasil “risiko rendah” berarti pasti 100% aman?', 'Belum tentu. Model deteksi dapat melewatkan ancaman baru yang belum terpetakan. Selalu periksa kembali identitas pengirim dan buka layanan melalui aplikasi atau alamat web resmi yang Anda ketik sendiri.'],
-  ['Apa perbedaan pemeriksaan URL, pesan, dan screenshot?', 'Pemeriksaan Tautan (URL) membedah struktur domain dan ekstensi berisiko. Pemeriksaan Pesan menganalisis pola intimidasi bahasa dan iming-iming hadiah. Fitur Screenshot (Beta) mengekstrak teks visual untuk mendeteksi formulir login tiruan.'],
-  ['Apakah data saya dikirim dan disimpan?', 'Pemeriksaan asli mengirim input ke layanan analisis untuk inferensi dan menyimpan hasilnya di riwayat akun privat Anda. Mode contoh simulasi berjalan lokal di peramban Anda. Selalu tutupi data pribadi sensitif sebelum mengunggah gambar.'],
-  ['Mengapa saya perlu masuk akun?', 'Akun diperlukan untuk menggunakan layanan analisis cloud dan melihat riwayat pemeriksaan pribadi Anda. Anda tetap dapat mencoba seluruh simulasi secara gratis tanpa perlu masuk.'],
+  ['Fitur apa saja yang saat ini aktif untuk memeriksa penipuan?', 'Saat ini Sentry aktif memeriksa Tautan (URL) dan Isi Pesan (WhatsApp/SMS). Analisis Tautan mendeteksi pola domain tiruan dan ekstensi berisiko, sedangkan Analisis Pesan mendeteksi bahasa manipulasi dan intimidasi penipu. Fitur analisis Screenshot adalah fitur masa depan yang saat ini masih dalam tahap riset dan pengembangan.'],
+  ['Apakah data saya dikirim dan disimpan?', 'Pemeriksaan asli, termasuk percobaan tamu, mengirim input ke layanan analisis. Riwayat pribadi tersedia untuk pengguna yang masuk akun. Mode contoh simulasi berjalan lokal di peramban Anda. Selalu tutupi data pribadi sensitif sebelum menguji data.'],
+  ['Apakah saya harus masuk sebelum mencoba?', 'Tidak. Anda dapat mencoba deteksi tautan dan pesan tanpa akun hingga batas percobaan dari layanan tercapai. Setelah itu, masuk atau daftar untuk melanjutkan pemeriksaan. Contoh simulasi lokal tetap dapat dicoba tanpa akun.'],
 ]
 
 export function HelpCenter() {
