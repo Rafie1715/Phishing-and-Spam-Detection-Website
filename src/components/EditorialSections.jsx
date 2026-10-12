@@ -180,7 +180,7 @@ const faqs = [
 ]
 
 export function HelpCenter() {
-  const [open, setOpen] = useState(0)
+  const [open, setOpen] = useState(null)
 
   return (
     <section id="bantuan" className="site-shell help-section section-anchor" aria-labelledby="help-title">
@@ -223,7 +223,7 @@ export function HelpCenter() {
 
 export function Footer() {
   return (
-    <footer className="site-shell site-footer">
+    <footer className="site-footer">
       <div>
         <a href="#top" className="footer-wordmark flex items-center gap-2">
           <svg className="h-7 w-7 text-cyan-400" viewBox="0 0 32 36" fill="none" aria-hidden="true">
